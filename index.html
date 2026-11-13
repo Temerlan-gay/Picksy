@@ -4,32 +4,34 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#f5f6f2" />
-    <meta name="description" content="Decido помогает принимать решения вместе." />
-    <title>Decido — решаем вместе</title>
+    <meta name="description" content="Picksy помогает принимать решения вместе." />
+    <title>Picksy — решаем вместе</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="decido.css" />
+    <link rel="stylesheet" href="app.css" />
   </head>
   <body>
     <div class="app-shell">
       <aside class="sidebar">
-        <a class="brand" href="#home" aria-label="Decido — главная"><span class="brand-mark">d</span><span>decido<span class="brand-dot">.</span></span></a>
+        <a class="brand" href="#home" aria-label="Picksy — главная"><span class="brand-mark">p</span><span>picksy<span class="brand-dot">.</span></span></a>
         <div class="workspace-label">ПРОСТРАНСТВО</div>
         <nav class="side-nav" aria-label="Навигация">
           <a class="side-link active" href="#home"><span class="side-icon">⌂</span>Главная</a>
           <a class="side-link" href="#polls"><span class="side-icon">◉</span>Голосования <span class="side-count" id="poll-count">0</span></a>
-          <a class="side-link" href="#questions" data-coming="Раздел вопросов появится в следующем этапе."><span class="side-icon">▤</span>Обсуждения</a>
-          <a class="side-link" href="#messages" data-coming="Сообщения появятся в следующем этапе."><span class="side-icon">▱</span>Сообщения</a>
-          <a class="side-link" href="#groups" data-coming="Группы появятся в следующем этапе."><span class="side-icon">♧</span>Группы</a>
+          <a class="side-link" href="#questions"><span class="side-icon">▤</span>Обсуждения</a>
+          <a class="side-link" href="#messages"><span class="side-icon">▱</span>Сообщения</a>
+          <a class="side-link" href="#groups"><span class="side-icon">♧</span>Группы</a>
         </nav>
-        <div class="sidebar-bottom"><div class="sidebar-note"><span class="note-mark">✳</span><strong>Решения лучше вместе</strong><p>Соберите мнения и найдите вариант, который подходит всем.</p></div><button class="profile-link" id="profile-button"><span class="user-avatar" id="user-avatar">А</span><span class="profile-copy"><strong id="profile-name">Алекс</strong><small>Локальный профиль</small></span><span class="more">···</span></button></div>
+        <div class="sidebar-bottom"><div class="sidebar-note"><span class="note-mark">✳</span><strong>Решения лучше вместе</strong><p>Соберите мнения и найдите вариант, который подходит всем.</p></div><button class="profile-link" id="profile-button"><span class="user-avatar" id="user-avatar">P</span><span class="profile-copy"><strong id="profile-name">Picksy</strong><small id="profile-username">Аккаунт</small></span><span class="more">···</span></button></div>
       </aside>
       <main class="main-area">
-        <header class="topbar"><div class="breadcrumbs"><span>Моё пространство</span><span class="crumb-sep">/</span><strong id="page-crumb">Главная</strong></div><div class="top-actions"><label class="search-box"><span>⌕</span><input id="search-input" type="search" placeholder="Найти голосование" aria-label="Найти голосование" /></label><button class="icon-button" id="notifications-button" aria-label="Уведомления" title="Уведомления">♧</button><button class="button button-primary top-create" id="top-create">＋ <span>Создать</span></button></div></header>
+        <header class="topbar"><div class="breadcrumbs"><span>Моё пространство</span><span class="crumb-sep">/</span><strong id="page-crumb">Главная</strong></div><div class="top-actions"><label class="search-box"><span>⌕</span><input id="search-input" type="search" placeholder="Найти голосование" aria-label="Найти голосование" /></label><button class="icon-button" id="notifications-button" aria-label="Уведомления пока недоступны" title="Уведомления появятся в следующем этапе" disabled>♧</button><button class="button button-primary top-create" id="top-create">＋ <span>Создать</span></button></div></header>
         <div id="view-root" class="view-root"></div>
       </main>
     </div>
+    <main id="auth-root" class="auth-root" hidden></main>
     <div class="modal-backdrop hidden" id="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><button class="modal-close" id="modal-close" aria-label="Закрыть">×</button><div id="modal-content"></div></section></div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="app.js"></script>
