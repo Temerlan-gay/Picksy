@@ -62,10 +62,10 @@ Optionally copy `.env.example` to `.env` and adjust the backend settings. The de
 With the Python environment activated, from the project root:
 
 ```sh
-npm run dev
+npm start
 ```
 
-Open <http://127.0.0.1:5173>. This starts Vite and FastAPI together. To run either process separately, use two terminals with the virtual environment activated:
+Open <http://127.0.0.1:5173>. This starts Vite and FastAPI together. The equivalent command is `npm run dev`. To run either process separately, use two terminals with the virtual environment activated:
 
 ```sh
 npm run dev:web
