@@ -37,7 +37,7 @@ export function CreatePollModal({ onClose, onCreate, initialOptions = [] }) {
         title: String(data.get('title')).trim(),
         description: String(data.get('description')).trim(),
         type: data.get('type'),
-        visibility: 'public',
+        visibility: data.get('visibility'),
         options,
         deadline: data.get('deadline') ? new Date(String(data.get('deadline'))).toISOString() : null
       });
@@ -66,6 +66,11 @@ export function CreatePollModal({ onClose, onCreate, initialOptions = [] }) {
             <option value="single">Выбрать один вариант</option>
             <option value="multiple">Выбрать несколько вариантов</option>
             <option value="rating">Оценить каждый вариант от 1 до 10</option>
+          </select>
+          <label htmlFor="poll-visibility">Доступ</label>
+          <select id="poll-visibility" name="visibility" defaultValue="public">
+            <option value="public">Публичное голосование</option>
+            <option value="private">Личное · доступ по ссылке или QR-коду</option>
           </select>
           <fieldset>
             <legend>Места <span className="optional">от 2 до 10</span></legend>

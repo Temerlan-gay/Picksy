@@ -1,6 +1,11 @@
-import { apiRequest } from '../../../shared/api/client.js';
+import { apiRequest, saveRoomGuestToken } from '../../../shared/api/client.js';
 
 export const listRooms = () => apiRequest('/api/rooms');
+export async function enterRoomByCode(code, displayName) {
+  const result = await apiRequest('/api/rooms/enter', { method: 'POST', body: { code, display_name: displayName } });
+  saveRoomGuestToken(result.room.id, result.guest_token);
+  return result;
+}
 export const createRoom = data => apiRequest('/api/rooms', { method: 'POST', body: data });
 export const getRoom = (roomId, inviteToken) => apiRequest(`/api/rooms/${encodeURIComponent(roomId)}${inviteToken ? `?invite_token=${encodeURIComponent(inviteToken)}` : ''}`);
 export const joinRoom = (roomId, inviteToken) => apiRequest(`/api/rooms/${encodeURIComponent(roomId)}/join`, { method: 'POST', body: { invite_token: inviteToken } });

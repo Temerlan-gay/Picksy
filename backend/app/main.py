@@ -40,7 +40,7 @@ app.add_middleware(
     allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
-    allow_headers=["Content-Type", "X-Poll-Invite"],
+    allow_headers=["Content-Type", "X-Poll-Invite", "X-Room-Guest"],
 )
 app.include_router(auth.router)
 app.include_router(polls.router)

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { PollDiscussion } from './PollDiscussion.jsx';
 
 const optionEmojis = ['🍜', '🎳', '☕', '🌿', '🎲', '🎨', '🍕', '🌅', '⛸️', '🎭'];
@@ -12,12 +13,13 @@ function getTimeLeft(deadline) {
   return `${hours}:${minutes}:${seconds}`;
 }
 
-export function ActivePoll({ poll, user, onVote, onCopyLink, onClose, canClose = false }) {
+export function ActivePoll({ poll, user, onVote, onCopyLink, onGetShareUrl, onClose, canClose = false }) {
   const existingRatings = useMemo(() => new Map((poll.my_vote?.ratings || []).map(item => [item.option_id, item.score])), [poll]);
   const [ratings, setRatings] = useState(() => Object.fromEntries(existingRatings));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [choices, setChoices] = useState(() => poll.my_vote?.option_ids || []);
+  const [shareUrl, setShareUrl] = useState('');
   useEffect(() => {
     setRatings(Object.fromEntries((poll.my_vote?.ratings || []).map(item => [item.option_id, item.score])));
     setChoices(poll.my_vote?.option_ids || []);
@@ -65,6 +67,11 @@ export function ActivePoll({ poll, user, onVote, onCopyLink, onClose, canClose =
     }
   }
 
+  async function showShareQr() {
+    try { setShareUrl(await onGetShareUrl(poll.id)); }
+    catch (requestError) { setError(requestError.message); }
+  }
+
   return (
     <section className="active-vote" aria-labelledby="active-poll-title">
       <div className="vote-heading">
@@ -87,7 +94,8 @@ export function ActivePoll({ poll, user, onVote, onCopyLink, onClose, canClose =
           <strong>{poll.vote_count}</strong> {poll.vote_count === 1 ? 'уже выбрал' : 'уже выбрали'}
         </span>
         <span className="timer"><span>◷</span> ещё {getTimeLeft(poll.deadline)}</span>
-        <button className="copy-link" onClick={() => onCopyLink(poll.id)}>Скопировать ссылку</button>
+        <div className="share-actions">{(poll.visibility !== 'private' || user.id === poll.owner_id) && <button className="copy-link" onClick={() => onCopyLink(poll.id)}>{'\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0441\u0441\u044b\u043b\u043a\u0443'}</button>}{(poll.visibility !== 'private' || user.id === poll.owner_id) && <button className="copy-link" onClick={showShareQr}>QR</button>}</div>
+        {shareUrl && <div className="poll-share-qr"><QRCodeSVG value={shareUrl} size={144} level="M" includeMargin /><span>{'\u041e\u0442\u0441\u043a\u0430\u043d\u0438\u0440\u0443\u0439\u0442\u0435 QR-\u043a\u043e\u0434, \u0447\u0442\u043e\u0431\u044b \u043e\u0442\u043a\u0440\u044b\u0442\u044c \u0433\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043d\u0438\u0435'}</span><button className="copy-link" onClick={() => setShareUrl('')}>{'\u0421\u043a\u0440\u044b\u0442\u044c QR'}</button></div>}
       </div>
 
       {closed && <div className="vote-message result-summary" role="status">

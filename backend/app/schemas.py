@@ -170,6 +170,7 @@ class PollListResponse(BaseModel):
 class DecisionRoomCreate(BaseModel):
     question: str = Field(min_length=1, max_length=200)
     method: Literal["majority", "unanimity", "no_objections"]
+    visibility: Literal["public", "private"] = "private"
     hide_results: bool = False
     deadline: datetime | None = None
 
@@ -185,6 +186,19 @@ class DecisionRoomCreate(BaseModel):
 
 class DecisionJoinRequest(BaseModel):
     invite_token: str = Field(min_length=20, max_length=200)
+
+
+class RoomGuestEnterRequest(BaseModel):
+    code: str = Field(min_length=8, max_length=8, pattern=r"^[A-HJ-NP-Z2-9]{8}$")
+    display_name: str = Field(min_length=1, max_length=50)
+
+    @model_validator(mode="after")
+    def clean_guest(self) -> "RoomGuestEnterRequest":
+        self.code = self.code.strip().upper()
+        self.display_name = self.display_name.strip()
+        if not self.display_name:
+            raise ValueError("Укажите имя для комнаты.")
+        return self
 
 
 class ProposalCreate(BaseModel):

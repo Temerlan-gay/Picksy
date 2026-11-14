@@ -1,4 +1,5 @@
 from pathlib import Path
+import secrets
 
 from sqlalchemy import create_engine, inspect, make_url, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
@@ -41,3 +42,19 @@ def create_database_schema() -> None:
             connection.execute(text("ALTER TABLE poll_options ADD COLUMN subtitle VARCHAR(160) NOT NULL DEFAULT ''"))
     with engine.begin() as connection:
         connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_sub ON users (google_sub)"))
+    room_columns = {column["name"] for column in inspect(engine).get_columns("decision_rooms")}
+    with engine.begin() as connection:
+        if "visibility" not in room_columns:
+            connection.execute(text("ALTER TABLE decision_rooms ADD COLUMN visibility VARCHAR(12) NOT NULL DEFAULT 'private'"))
+        if "join_code" not in room_columns:
+            connection.execute(text("ALTER TABLE decision_rooms ADD COLUMN join_code VARCHAR(8) NOT NULL DEFAULT ''"))
+        existing_codes = {row[0] for row in connection.execute(text("SELECT join_code FROM decision_rooms WHERE join_code <> ''"))}
+        empty_rooms = connection.execute(text("SELECT id FROM decision_rooms WHERE join_code = ''")).all()
+        alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+        for row in empty_rooms:
+            code = "".join(secrets.choice(alphabet) for _ in range(8))
+            while code in existing_codes:
+                code = "".join(secrets.choice(alphabet) for _ in range(8))
+            existing_codes.add(code)
+            connection.execute(text("UPDATE decision_rooms SET join_code = :code WHERE id = :room_id"), {"code": code, "room_id": row[0]})
+        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_decision_room_join_code ON decision_rooms (join_code)"))

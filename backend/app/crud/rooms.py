@@ -1,7 +1,9 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import DecisionBallot, DecisionProposal, DecisionRoom, DecisionRoomMember, DecisionRound, User
+from app.models import DecisionBallot, DecisionProposal, DecisionRoom, DecisionRoomMember, DecisionRound, RoomGuestSession, User
 
 
 def add_room(db: Session, room: DecisionRoom, owner: User) -> DecisionRoom:
@@ -59,6 +61,29 @@ def rotate_room_invitation(db: Session, room: DecisionRoom, token_hash: str) -> 
 def add_room_member(db: Session, room_id: str, user_id: str) -> None:
     db.add(DecisionRoomMember(room_id=room_id, user_id=user_id))
     db.commit()
+
+
+def add_guest_member(db: Session, user: User, room_id: str, guest_session: RoomGuestSession) -> None:
+    db.add(user)
+    db.flush()
+    guest_session.user_id = user.id
+    db.add(DecisionRoomMember(room_id=room_id, user_id=user.id))
+    db.add(guest_session)
+    db.commit()
+
+
+def get_guest_user(db: Session, token_hash: str) -> User | None:
+    session = db.scalar(select(RoomGuestSession).where(RoomGuestSession.token_hash == token_hash))
+    if session is None:
+        return None
+    expires_at = session.expires_at if session.expires_at.tzinfo else session.expires_at.replace(tzinfo=timezone.utc)
+    if expires_at <= datetime.now(timezone.utc):
+        return None
+    return session.user
+
+
+def find_room_by_code(db: Session, code: str) -> DecisionRoom | None:
+    return db.scalar(select(DecisionRoom.id).where(DecisionRoom.join_code == code))
 
 
 def get_room(db: Session, room_id: str, lock: bool = False) -> DecisionRoom | None:

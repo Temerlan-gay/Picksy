@@ -1,22 +1,23 @@
 import hashlib
 import json
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.crud.rooms import (
-    add_ballot, add_proposal, add_room, add_room_member, add_round, begin_round, commit_ballot,
-    finish_round, get_room, get_round, list_rooms_for_user, rotate_room_invitation,
+    add_ballot, add_guest_member, add_proposal, add_room, add_room_member, add_round, begin_round, commit_ballot,
+    find_room_by_code, finish_round, get_room, get_round, list_rooms_for_user, rotate_room_invitation,
     set_proposal_status,
 )
 from app.models import (
     DecisionBallot, DecisionProposal, DecisionRoom, DecisionRoomMember,
-    DecisionRound, DecisionRoundOption, DecisionRoundParticipant, User,
+    DecisionRound, DecisionRoundOption, DecisionRoundParticipant, RoomGuestSession, User,
 )
-from app.schemas import DecisionBallotRequest, DecisionRoomCreate, ProposalCreate
+from app.schemas import DecisionBallotRequest, DecisionRoomCreate, ProposalCreate, RoomGuestEnterRequest
+from app.services.auth import hash_password
 
 
 def _fail(code: int, message: str) -> None:
@@ -66,8 +67,10 @@ def _serialize_room(room: DecisionRoom, user: User, invite_token: str | None = N
     return {
         "id": room.id, "owner_id": room.owner_id, "owner_name": next((m.user.display_name for m in room.members if m.user_id == room.owner_id), "Организатор"),
         "question": room.question, "method": room.method, "hide_results": bool(room.hide_results),
+        "visibility": room.visibility, "join_code": room.join_code,
         "deadline": room.deadline, "created_at": room.created_at, "status": status_value,
         "is_member": _member(room, user.id) is not None, "is_owner": room.owner_id == user.id,
+        "is_guest": user.email.endswith("@guest.picksy.invalid"),
         "invite_token": invite_token,
         "members": [{"user_id": m.user_id, "display_name": m.user.display_name, "is_owner": m.user_id == room.owner_id} for m in room.members],
         "proposals": [{"id": p.id, "text": p.text, "status": p.status, "author": p.author.display_name, "user_id": p.user_id} for p in room.proposals],
@@ -78,12 +81,46 @@ def _serialize_room(room: DecisionRoom, user: User, invite_token: str | None = N
 
 def create_room(db: Session, user: User, data: DecisionRoomCreate) -> dict:
     token = secrets.token_urlsafe(32)
+    code = _new_join_code()
     room = DecisionRoom(owner_id=user.id, question=data.question, method=data.method,
+                        visibility=data.visibility, join_code=code,
                         hide_results=int(data.hide_results), deadline=data.deadline,
                         invite_token_hash=hashlib.sha256(token.encode()).hexdigest())
     add_room(db, room, user)
     room = get_room(db, room.id)
     return _serialize_room(room, user, token)
+
+
+def _new_join_code() -> str:
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    return "".join(secrets.choice(alphabet) for _ in range(8))
+
+
+def enter_room_by_code(db: Session, data: RoomGuestEnterRequest) -> dict:
+    room_id = find_room_by_code(db, data.code)
+    room = get_room(db, room_id, lock=True) if room_id else None
+    if room is None:
+        _fail(status.HTTP_404_NOT_FOUND, "Комната с таким кодом не найдена.")
+    if room.rounds:
+        _fail(status.HTTP_409_CONFLICT, "Голосование уже началось. Вход в комнату закрыт.")
+    if len(room.members) >= 100:
+        _fail(status.HTTP_409_CONFLICT, "В комнате достигнут лимит участников.")
+    user = User(
+        username=f"guest_{secrets.token_hex(8)}",
+        display_name=data.display_name,
+        email=f"guest_{secrets.token_hex(16)}@guest.picksy.invalid",
+        password_hash=hash_password(secrets.token_urlsafe(48)),
+    )
+    raw_token = secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc)
+    guest_session = RoomGuestSession(
+        token_hash=hashlib.sha256(raw_token.encode()).hexdigest(),
+        room_id=room.id,
+        expires_at=now + timedelta(days=30),
+    )
+    add_guest_member(db, user, room.id, guest_session)
+    room = get_room(db, room.id)
+    return {"room": _serialize_room(room, user), "guest_token": raw_token}
 
 
 def list_rooms(db: Session, user: User) -> list[dict]:

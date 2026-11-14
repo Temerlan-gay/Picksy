@@ -17,7 +17,7 @@ def list_visible_polls(db: Session, user: User) -> list[Poll]:
                 selectinload(Poll.votes).selectinload(Vote.ratings),
                 selectinload(Poll.votes).selectinload(Vote.choices),
             )
-            .where((Poll.visibility == "public") | (Poll.owner_id == user.id))
+            .where((Poll.visibility == "public") | (Poll.owner_id == user.id) | Poll.votes.any(Vote.user_id == user.id))
             .order_by(Poll.created_at.desc())
             .limit(100)
             .execution_options(populate_existing=True)
@@ -47,6 +47,12 @@ def add_poll(db: Session, poll: Poll) -> Poll:
 
 def set_poll_closed(db: Session, poll: Poll, closed_at: datetime) -> Poll:
     poll.closed_at = closed_at
+    db.flush()
+    return poll
+
+
+def set_poll_invite_hash(db: Session, poll: Poll, invite_hash: str) -> Poll:
+    poll.invite_token_hash = invite_hash
     db.flush()
     return poll
 

@@ -88,11 +88,13 @@ The API is available at <http://127.0.0.1:8000>; interactive API docs are at <ht
 
 Participants can discuss the choices in the active poll card. Each non-owner can post two messages per poll; the poll owner can answer without that cap, with server-side rate limits to prevent spam. The discussion remains in PostgreSQL and refreshes in the browser every ten seconds.
 
-The three supported types are single choice, multiple choice, and 1–10 ratings. Each account can submit one ballot per poll; existing ballots can be updated until the poll closes. Public polls are visible to signed-in users. Private invite support exists in the API but is not exposed by the current UI.
+The three supported types are single choice, multiple choice, and 1–10 ratings. Each account can submit one ballot per poll; existing ballots can be updated until the poll closes. Public polls are visible to signed-in users.
+
+The poll creation form now lets the organizer choose public or private access. A private poll can be shared as an invitation link or QR code; invitees sign in before voting.
 
 ## Group decision rooms
 
-Open **Комнаты** to create a VETO decision room. The organizer sets a question and chooses majority, unanimity, or no objections. Share the invitation link so signed-in participants can join and suggest options. The organizer accepts or rejects suggestions, then starts a round once at least one other participant and one accepted option are present. The server snapshots the roster and choices before voting begins.
+Open **Комнаты** to create a VETO decision room. The organizer sets a question, access mode, and majority, unanimity, or no-objections method. Every room gets an eight-character entry code and a QR code. Participants scan it or open the invitation, enter a display name, and join without creating an account. They can then suggest options; the organizer accepts or rejects them. A round can start once there is at least one other participant and one accepted option. The server snapshots the roster and choices before voting begins.
 
 Each person in the snapshot, including the organizer, can submit one complete ballot. Results are saved when the last participant votes. Hidden-result rounds reveal progress and voter status while ballots are still pending, then show the result distribution. Previous rounds stay in the room history, and the organizer can prepare another round with the same accepted options and room members.
 

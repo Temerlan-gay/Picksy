@@ -6,9 +6,13 @@ import { ideaKinds, optionsForIdea } from '../features/ideas/ideasData.js';
 import { IdeasSection } from '../features/ideas/components/IdeasSection.jsx';
 import { ActivePoll } from '../features/polls/components/ActivePoll.jsx';
 import { CreatePollModal } from '../features/polls/components/CreatePollModal.jsx';
-import { CreateDecisionRoomModal, DecisionRoomPage, DecisionRoomsPage } from '../features/polls/components/DecisionRoom.jsx';
-import { closePoll, createPoll, listPolls, submitChoices, submitRatings } from '../features/polls/api/pollsApi.js';
+import { CreateDecisionRoomModal, DecisionRoomPage, DecisionRoomsPage, GuestJoinPage } from '../features/polls/components/DecisionRoom.jsx';
+import { closePoll, createPoll, createPollInvitation, getPoll, listPolls, submitChoices, submitRatings } from '../features/polls/api/pollsApi.js';
 import { createRoom, listRooms } from '../features/polls/api/roomsApi.js';
+import { getPollInviteToken, hasRoomGuestToken, savePollInviteToken } from '../shared/api/client.js';
+
+const noRefresh = async () => {};
+const noToast = () => {};
 
 function Header({ user, activeCount, onProfile }) {
   const location = useLocation();
@@ -48,13 +52,13 @@ function Hero({ onCreate, onCollections }) {
   );
 }
 
-function IdeasPage({ polls, user, filter, setFilter, onCreate, onChoose, onVote, onCopy, onCollections }) {
+function IdeasPage({ polls, user, filter, setFilter, onCreate, onChoose, onVote, onCopy, onGetShareUrl, onCollections }) {
   const activePoll = polls.find(poll => !poll.closed);
   const completedPoll = polls.find(poll => poll.closed);
   return <>
     <Hero onCreate={() => onCreate()} onCollections={() => onCollections()} />
     {activePoll
-      ? <ActivePoll poll={activePoll} user={user} onVote={onVote} onCopyLink={onCopy} />
+      ? <ActivePoll poll={activePoll} user={user} onVote={onVote} onCopyLink={onCopy} onGetShareUrl={onGetShareUrl} />
       : completedPoll
         ? <section className="active-vote empty-poll"><div className="vote-heading"><div><div className="section-kicker"><span className="live-dot" /> ВАШ АКТИВНЫЙ ВЫБОР</div><h2>Открытых голосований пока нет</h2><p className="vote-subtitle">Последнее решение уже завершено. Создайте новый план для компании.</p></div></div><button className="button-coral" onClick={() => onCreate()}>Создать голосование <span>→</span></button></section>
         : <section className="active-vote empty-poll"><div className="vote-heading"><div><div className="section-kicker"><span className="live-dot" /> ВАШ АКТИВНЫЙ ВЫБОР</div><h2>Куда вернёмся в следующий раз?</h2><p className="vote-subtitle">Добавьте три места из недавних встреч и выберите, куда пойти компанией.</p></div></div><button className="button-coral" onClick={() => onCreate()}>Добавить места <span>→</span></button></section>}
@@ -87,9 +91,9 @@ function CollectionsPage({ onCreate }) {
   </section>;
 }
 
-function PollDetailPage({ poll, onVote, onCopy, onClose, user }) {
+function PollDetailPage({ poll, onVote, onCopy, onGetShareUrl, onClose, user }) {
   if (!poll) return <div className="loading-screen">Загружаем голосование…</div>;
-  return <section className="detail-page"><Link to="/polls" className="all-ideas">← Все голосования</Link><ActivePoll poll={poll} user={user} onVote={onVote} onCopyLink={onCopy} onClose={onClose} canClose={poll.owner_id === user.id} /></section>;
+  return <section className="detail-page"><Link to="/polls" className="all-ideas">← Все голосования</Link><ActivePoll poll={poll} user={user} onVote={onVote} onCopyLink={onCopy} onGetShareUrl={onGetShareUrl} onClose={onClose} canClose={poll.owner_id === user.id} /></section>;
 }
 
 function Footer() {
@@ -154,6 +158,20 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!user) return undefined;
+    const pollId = location.pathname.match(/^\/polls\/([0-9a-f-]{36})$/i)?.[1];
+    if (!pollId) return undefined;
+    const inviteToken = new URLSearchParams(location.search).get('invite') || '';
+    if (inviteToken) savePollInviteToken(pollId, inviteToken);
+    if (polls.some(poll => poll.id === pollId)) return undefined;
+    let active = true;
+    getPoll(pollId, inviteToken)
+      .then(({ poll }) => { if (active) setPolls(current => current.some(item => item.id === poll.id) ? current : [poll, ...current]); })
+      .catch(requestError => { if (active) setError(requestError.message); });
+    return () => { active = false; };
+  }, [user, location.pathname, location.search, polls]);
+
+  useEffect(() => {
     if (!toast) return undefined;
     const timer = window.setTimeout(() => setToast(''), 2800);
     return () => window.clearTimeout(timer);
@@ -194,7 +212,8 @@ export default function App() {
   }
 
   async function handleCreate(data) {
-    await createPoll(data);
+    const createdPoll = await createPoll(data);
+    if (createdPoll.invite_token) savePollInviteToken(createdPoll.id, createdPoll.invite_token);
     await refreshPolls();
     setModal(null);
     navigate('/');
@@ -228,10 +247,15 @@ export default function App() {
   }
 
   async function handleCopyLink(pollId) {
-    const url = `${window.location.origin}/polls/${pollId}`;
+    let url;
     try {
+      url = await getPollShareUrl(pollId);
       await navigator.clipboard.writeText(url);
     } catch {
+      if (!url) {
+        setToast('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0437\u0434\u0430\u0442\u044c \u043f\u0440\u0438\u0433\u043b\u0430\u0448\u0435\u043d\u0438\u0435.');
+        return;
+      }
       const field = document.createElement('textarea');
       field.value = url;
       field.style.position = 'fixed';
@@ -248,6 +272,17 @@ export default function App() {
     setToast('Ссылка скопирована.');
   }
 
+  async function getPollShareUrl(pollId) {
+    const poll = polls.find(item => item.id === pollId);
+    let inviteToken = poll?.visibility === 'private' ? getPollInviteToken(pollId) : '';
+    if (poll?.visibility === 'private' && !inviteToken) {
+      const result = await createPollInvitation(pollId);
+      inviteToken = result.invite_token;
+      savePollInviteToken(pollId, inviteToken);
+    }
+    return `${window.location.origin}/polls/${pollId}${inviteToken ? `?invite=${encodeURIComponent(inviteToken)}` : ''}`;
+  }
+
   async function handleLogout() {
     await logout();
     setUser(null);
@@ -260,6 +295,9 @@ export default function App() {
     ? polls.find(poll => poll.id === location.pathname.split('/')[2])
     : null;
 
+  if (location.pathname === '/join') return <main className="shell guest-shell"><GuestJoinPage /></main>;
+  const guestRoomId = location.pathname.match(/^\/rooms\/([0-9a-f-]{36})$/i)?.[1];
+  if (!user && guestRoomId && hasRoomGuestToken(guestRoomId)) return <main className="shell guest-shell"><DecisionRoomPage user={null} onRefreshRooms={noRefresh} onToast={noToast} /></main>;
   if (loading) return <div className="loading-screen">Decido загружает ваши решения…</div>;
   if (!user) return <AuthPanel onSubmit={handleAuth} onGoogleCredential={handleGoogleAuth} error={authError || error} />;
   if (error) return <main className="shell"><div className="error-screen"><h1>Не удалось загрузить Decido</h1><p>{error}</p><button className="button-dark" onClick={() => window.location.reload()}>Попробовать ещё раз</button></div></main>;
@@ -267,9 +305,9 @@ export default function App() {
   return <div className="shell">
     <Header user={user} activeCount={pollCount} onProfile={() => setProfileOpen(true)} />
     <Routes>
-      <Route path="/" element={<IdeasPage polls={polls} user={user} filter={filter} setFilter={setFilter} onCreate={showCreate} onChoose={showCreate} onVote={handleVote} onCopy={handleCopyLink} onCollections={() => navigate('/collections')} />} />
+      <Route path="/" element={<IdeasPage polls={polls} user={user} filter={filter} setFilter={setFilter} onCreate={showCreate} onChoose={showCreate} onVote={handleVote} onCopy={handleCopyLink} onGetShareUrl={getPollShareUrl} onCollections={() => navigate('/collections')} />} />
       <Route path="/polls" element={<PollsPage polls={polls} onCreate={showCreate} />} />
-      <Route path="/polls/:pollId" element={<PollDetailPage poll={currentPoll} onVote={handleVote} onCopy={handleCopyLink} onClose={handleClosePoll} user={user} />} />
+      <Route path="/polls/:pollId" element={<PollDetailPage poll={currentPoll} onVote={handleVote} onCopy={handleCopyLink} onGetShareUrl={getPollShareUrl} onClose={handleClosePoll} user={user} />} />
       <Route path="/rooms" element={<DecisionRoomsPage rooms={rooms} onCreate={showCreateRoom} />} />
       <Route path="/rooms/:roomId" element={<DecisionRoomPage user={user} onRefreshRooms={refreshRooms} onToast={setToast} />} />
       <Route path="/collections" element={<CollectionsPage onCreate={showCreate} />} />

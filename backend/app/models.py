@@ -171,12 +171,18 @@ class VoteChoice(Base):
 
 class DecisionRoom(Base):
     __tablename__ = "decision_rooms"
-    __table_args__ = (CheckConstraint("method IN ('majority', 'unanimity', 'no_objections')", name="ck_room_method"),)
+    __table_args__ = (
+        CheckConstraint("method IN ('majority', 'unanimity', 'no_objections')", name="ck_room_method"),
+        CheckConstraint("visibility IN ('public', 'private')", name="ck_room_visibility"),
+        UniqueConstraint("join_code", name="uq_decision_room_join_code"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     owner_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     question: Mapped[str] = mapped_column(String(200), nullable=False)
     method: Mapped[str] = mapped_column(String(20), nullable=False)
+    visibility: Mapped[str] = mapped_column(String(12), default="private", nullable=False)
+    join_code: Mapped[str] = mapped_column(String(8), nullable=False)
     hide_results: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     invite_token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -255,3 +261,15 @@ class DecisionBallot(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     answer_json: Mapped[str] = mapped_column(Text, nullable=False)
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class RoomGuestSession(Base):
+    __tablename__ = "room_guest_sessions"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    room_id: Mapped[str] = mapped_column(ForeignKey("decision_rooms.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    user: Mapped[User] = relationship(lazy="joined")

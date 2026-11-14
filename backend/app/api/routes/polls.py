@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models import User
 from app.schemas import PollCreate, PollListResponse, PollResponse, VoteRequest
-from app.services.polls import cast_vote, close_poll, create_poll, get_poll, list_polls
+from app.services.polls import cast_vote, close_poll, create_poll, create_poll_invitation, get_poll, list_polls
 
 router = APIRouter(prefix="/api/polls", tags=["polls"])
 
@@ -36,6 +36,15 @@ def get_poll_detail(
     invite_token: str | None = Header(default=None, alias="x-poll-invite"),
 ) -> PollResponse:
     return get_poll(db, user, str(poll_id), invite_token)
+
+
+@router.post("/{poll_id}/invitation")
+def post_poll_invitation(
+    poll_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    return create_poll_invitation(db, user, str(poll_id))
 
 
 @router.post("/{poll_id}/vote", response_model=PollResponse)

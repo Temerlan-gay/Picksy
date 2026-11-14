@@ -5,7 +5,7 @@ import secrets
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.crud.polls import add_poll, get_poll_by_id, list_visible_polls, replace_vote, set_poll_closed
+from app.crud.polls import add_poll, get_poll_by_id, list_visible_polls, replace_vote, set_poll_closed, set_poll_invite_hash
 from app.models import Poll, PollOption, User
 from app.schemas import (
     PollCreate,
@@ -130,6 +130,20 @@ def close_poll(db: Session, user: User, poll_id: str) -> PollResponse:
         set_poll_closed(db, poll, datetime.now(timezone.utc))
         db.commit()
     return _serialize_poll(get_poll_by_id(db, poll.id), user.id)
+
+
+def create_poll_invitation(db: Session, user: User, poll_id: str) -> dict[str, str]:
+    poll = get_poll_by_id(db, poll_id)
+    if poll is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Голосование не найдено.")
+    if poll.owner_id != user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Создать приглашение может только организатор.")
+    if poll.visibility != "private":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Для публичного голосования приглашение не требуется.")
+    token = secrets.token_urlsafe(32)
+    set_poll_invite_hash(db, poll, hashlib.sha256(token.encode("utf-8")).hexdigest())
+    db.commit()
+    return {"invite_token": token}
 
 
 def cast_vote(
