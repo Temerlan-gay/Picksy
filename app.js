@@ -16,6 +16,25 @@ const placeTypeLabels = {
   tourist_attraction: 'Достопримечательность',
   zoo: 'Зоопарк'
 };
+const ideaCategories = [
+  { id: 'all', label: 'Все идеи', icon: '✳' },
+  { id: 'sit', label: 'Посидеть', icon: '☕' },
+  { id: 'play', label: 'Поиграть', icon: '🎳' },
+  { id: 'walk', label: 'Прогуляться', icon: '🌿' },
+  { id: 'culture', label: 'Вдохновиться', icon: '🎨' },
+  { id: 'food', label: 'Вкусно поесть', icon: '🍕' }
+];
+const planIdeas = [
+  { title: 'Кофейня «Сова»', category: 'sit', emoji: '☕', type: 'Кофейня' },
+  { title: 'Рамен-бар «Тёплый»', category: 'food', emoji: '🍜', type: 'Вкусный вечер' },
+  { title: 'Исследуем парк', category: 'walk', emoji: '🌳', type: 'Прогулка' },
+  { title: 'Боулинг «Страйк»', category: 'play', emoji: '🎳', type: 'Игра и компания' },
+  { title: 'Маленькая галерея', category: 'culture', emoji: '🖼️', type: 'Искусство' },
+  { title: 'Пиццерия «Тесто»', category: 'food', emoji: '🍕', type: 'Вкусный вечер' },
+  { title: 'Тропа у озера', category: 'walk', emoji: '🌅', type: 'Прогулка' },
+  { title: 'Настолки «Час»', category: 'play', emoji: '🎲', type: 'Игры' },
+  { title: 'Каток', category: 'play', emoji: '⛸️', type: 'Активный отдых' }
+];
 
 let currentUser = null;
 let polls = [];
@@ -33,6 +52,7 @@ let placeSearchError = '';
 let placeSearchLoading = false;
 let placeSearchVersion = 0;
 let webFontsLoaded = false;
+let ideaFilter = 'all';
 
 function readInviteTokens() {
   try {
@@ -196,15 +216,45 @@ function pollCard(poll) {
 
 function renderHome(query = '') {
   const filtered = polls.filter(poll => `${poll.title} ${poll.description} ${poll.options.map(option => option.text).join(' ')}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
-  const open = filtered.filter(poll => !poll.closed);
-  const recent = filtered.slice(0, 4);
+  const activePoll = filtered.find(poll => !poll.closed);
+  const ideas = planIdeas.filter(idea => ideaFilter === 'all' || idea.category === ideaFilter);
   pageTitle(query ? 'Поиск' : 'Главная');
   $('#poll-count').textContent = String(polls.filter(poll => !poll.closed).length);
-  $('#view-root').innerHTML = `<section class="welcome-row"><div><div class="eyebrow"><span class="eyebrow-dot"></span> ВАШЕ ПРОСТРАНСТВО</div><h1>Привет, ${escapeHTML(currentUser.displayName)} <span class="wave">✳</span></h1><p class="welcome-copy">Что решим вместе? Создайте голосование и соберите мнения в одном месте.</p></div><button class="button button-primary create-large" data-action="create">＋ Создать голосование <span>↗</span></button></section>
-    <section class="quick-stats"><article class="stat-card"><span class="stat-icon coral">◉</span><div><small>Активные голосования</small><strong>${open.length}</strong></div><span class="stat-foot">сейчас</span></article><article class="stat-card"><span class="stat-icon mint">✓</span><div><small>Создано вами</small><strong>${polls.filter(poll => poll.owner_id === currentUser.id).length}</strong></div><span class="stat-foot">всего</span></article><article class="stat-card"><span class="stat-icon lilac">↗</span><div><small>Всего голосов</small><strong>${polls.reduce((sum, poll) => sum + poll.voteCount, 0)}</strong></div><span class="stat-foot">в голосованиях</span></article></section>
-    <section class="content-section"><div class="section-heading"><div><div class="section-label">СОБИРАЕМ МНЕНИЯ</div><h2>${query ? 'Результаты поиска' : 'Активные голосования'}</h2></div><a href="#polls" class="quiet-link">Все голосования <span>→</span></a></div>${open.length ? `<div class="poll-grid">${open.map(pollCard).join('')}</div>` : `<div class="empty-card"><div class="empty-illustration">◉</div><h3>${query ? 'Ничего не нашлось' : 'Пока нет активных голосований'}</h3><p>${query ? 'Попробуйте изменить поисковый запрос.' : 'Создайте первое голосование и пригласите людей решить вопрос вместе.'}</p>${!query ? '<button class="button button-outline" data-action="create">Создать голосование <span>→</span></button>' : ''}</div>`}</section>
-    <section class="content-section recent-section"><div class="section-heading"><div><div class="section-label">ИСТОРИЯ</div><h2>Недавние голосования</h2></div></div>${recent.length ? `<div class="recent-list">${recent.map(poll => `<a class="recent-row" href="#poll/${encodeURIComponent(poll.id)}"><span class="recent-icon">${poll.closed ? '✓' : '◉'}</span><span class="recent-main"><strong>${escapeHTML(poll.title)}</strong><small>${poll.options.length} вариантов · ${poll.voteCount} голосов</small></span><span class="status-pill ${poll.closed ? 'closed' : ''}">${poll.closed ? 'Завершено' : 'Активно'}</span><span class="row-arrow">↗</span></a>`).join('')}</div>` : '<div class="recent-empty">Ваши голосования появятся здесь.</div>'}</section>
-    <section class="collection-promo"><div><div class="section-label">СОБРАНО ДЛЯ ВАС</div><h2>Хорошее место — ближе, чем кажется</h2><p>Найдём кафе, развлечения и прогулки рядом с вами — с настоящими оценками посетителей.</p><a class="button button-outline" href="#collections">Найти места рядом <span>→</span></a></div><div class="collection-promo-art" aria-hidden="true"><span>☕</span><span>🎳</span><span>✳</span></div></section>`;
+  const remaining = activePoll?.deadline ? Math.max(0, Date.parse(activePoll.deadline) - Date.now()) : null;
+  const countdown = remaining === null ? '' : `${String(Math.floor(remaining / 3_600_000)).padStart(2, '0')}:${String(Math.floor(remaining / 60_000) % 60).padStart(2, '0')}:${String(Math.floor(remaining / 1000) % 60).padStart(2, '0')}`;
+  const activePollMarkup = activePoll
+    ? `<section class="active-vote">
+      <div class="vote-heading"><div><div class="eyebrow"><span class="live-dot"></span> ВАШ АКТИВНЫЙ ВЫБОР</div><h2>${escapeHTML(activePoll.title)}</h2><p class="vote-subtitle">${escapeHTML(activePoll.organizer)} собирает компанию${activePoll.deadline ? ` · голосование закроется ${formatDate(activePoll.deadline)}` : ''}</p></div><a class="vote-open" href="#poll/${encodeURIComponent(activePoll.id)}" aria-label="Открыть голосование">↗</a></div>
+      <div class="vote-meta"><span class="participants"><span class="participant-dots"><i></i><i></i><i></i></span>${activePoll.participantCount} ${activePoll.participantCount === 1 ? 'участник' : 'участников'} · ${activePoll.voteCount} ${activePoll.voteCount === 1 ? 'уже выбрал' : 'уже выбрали'}</span>${countdown ? `<span class="timer">◷ ещё ${countdown}</span>` : '<span class="timer">◷ Решение вместе</span>'}<button class="copy-link" data-action="share-home-poll" data-poll-id="${escapeHTML(activePoll.id)}">Скопировать ссылку</button></div>
+      <div class="option-list">${activePoll.options.map((option, index) => {
+        const scoreButtons = Array.from({ length: 10 }, (_, scoreIndex) => {
+          const score = scoreIndex + 1;
+          const selected = activePoll.myVote?.ratings?.find(rating => rating.optionId === option.id)?.score === score;
+          return `<button type="button" class="score rate-button ${selected ? 'chosen' : ''}" data-option="${escapeHTML(option.id)}" data-score="${score}" aria-label="Оценка ${score}" ${activePoll.closed || activePoll.myVote ? 'disabled' : ''}>${score}</button>`;
+        }).join('');
+        const optionHead = `<div class="option-top"><span class="option-number">${String(index + 1).padStart(2, '0')}</span><span class="option-name">${escapeHTML(option.text)}</span><span class="option-emoji" aria-hidden="true">${['☕', '🍜', '🎳', '🌿', '🎲'][index % 5]}</span></div>`;
+        const ratingDetail = option.count ? `${option.count} ${option.count === 1 ? 'оценка' : 'оценок'}${option.score === null ? '' : ` · в среднем ${option.score.toFixed(1)}`}` : 'Пока без оценок';
+        const radio = `<article class="option-card ballot-option">${optionHead}<div class="rating-detail">${ratingDetail}</div><div class="rating-scale">${scoreButtons}</div></article>`;
+        const chosen = activePoll.myVote?.optionIds?.includes(option.id) || false;
+        const choice = `<label class="option-card ballot-option ${chosen ? 'selected' : ''}"><input class="option-check" type="${activePoll.type === 'single' ? 'radio' : 'checkbox'}" name="home-vote" value="${escapeHTML(option.id)}" aria-label="${escapeHTML(option.text)}" ${chosen ? 'checked' : ''} ${activePoll.closed || activePoll.myVote ? 'disabled' : ''}>${optionHead}<div class="rating-detail">${option.count} ${option.count === 1 ? 'голос' : 'голосов'}</div></label>`;
+        return activePoll.type === 'rating' ? radio : choice;
+      }).join('')}</div>
+      <div class="vote-footer"><span class="privacy-note">Голос сохраняется надёжно и виден участникам голосования.</span>${activePoll.closed || activePoll.myVote ? '<span class="vote-saved">✓ Ваш ответ сохранён</span>' : `<button class="button-coral" data-action="submit-vote" data-poll-id="${escapeHTML(activePoll.id)}">Отправить ${activePoll.type === 'rating' ? 'оценку' : 'голос'} <span>→</span></button>`}</div>
+    </section>`
+    : `<section class="active-vote active-vote-empty"><div class="vote-heading"><div><div class="eyebrow"><span class="live-dot"></span> ВАШ АКТИВНЫЙ ВЫБОР</div><h2>Пока выбираем вопрос</h2><p class="vote-subtitle">Создайте голосование, поделитесь ссылкой и решите вместе.</p></div></div><button class="button-coral" data-action="create">Создать первое голосование <span>→</span></button></section>`;
+  $('#view-root').innerHTML = `<section class="hero">
+      <div class="hero-copy"><div class="eyebrow"><span class="eyebrow-dot"></span> ХОРОШИЕ ПЛАНЫ НАЧИНАЮТСЯ ВМЕСТЕ</div><h1>Ну что, <span>куда?</span></h1><p>Соберите варианты, киньте друзьям ссылку и выберите план<br class="desktop-break"> без вечного «мне всё равно».</p>
+        <div class="hero-actions"><button class="button-dark" data-action="create">＋ Создать голосование <span>↗</span></button><a class="mood-link" href="#collections"><span>✳</span> Сначала выбрать настроение</a></div>
+        <div class="hero-note"><span class="hero-people" aria-hidden="true"><i></i><i></i><i></i></span><span>План выбирает вся компания</span><span class="hero-divider">|</span><span class="hero-check">✓</span><span>решение за минуту</span></div>
+      </div>
+      <div class="hero-art" aria-hidden="true"><div class="sun"></div><div class="art-photo photo-one"><span>☕</span></div><div class="art-photo photo-two"><span>🪴</span></div><div class="art-photo photo-three"><span>🎳</span></div><div class="art-ticket"><span>ПЛАН НА ВЕЧЕР</span><strong>найден <span>✳</span></strong></div><div class="art-scribble">пошли!</div><span class="art-star star-one">✳</span><span class="art-star star-two">✦</span><span class="art-caption">куда угодно, но вместе</span></div>
+    </section>
+    ${activePollMarkup}
+    <section class="ideas-section"><div class="ideas-heading"><div><div class="eyebrow"><span class="eyebrow-dot"></span> ИДЕИ ДЛЯ ВАШЕГО ВЕЧЕРА</div><h2>${query ? 'Нашли для выбора' : 'Есть настроение?'}</h2><p>Не нужно придумывать с нуля — начните с идеи и решите вместе.</p></div><a href="#collections" class="all-ideas">Все идеи <span>↗</span></a></div>
+      <div class="filter-row" role="tablist" aria-label="Настроение">${ideaCategories.map(category => `<button class="filter ${ideaFilter === category.id ? 'active' : ''}" type="button" role="tab" aria-selected="${ideaFilter === category.id}" data-idea-filter="${category.id}"><span>${category.icon}</span> ${category.label}</button>`).join('')}</div>
+      <div class="card-grid">${ideas.map((idea, index) => `<button type="button" class="place-card" data-action="create-idea" data-idea-index="${planIdeas.indexOf(idea)}"><span class="place-image place-image-${index % 6}"><span class="place-badge">${idea.type}</span><span class="place-save" aria-hidden="true">♡</span><span class="place-emoji">${idea.emoji}</span></span><span class="place-info"><span class="place-title-line"><strong class="place-title">${escapeHTML(idea.title)}</strong><span class="place-stars">✳</span></span><span class="place-desc">Идея, которую можно обсудить вместе</span><span class="place-meta">＋ Добавить в голосование <b>↗</b></span></span></button>`).join('')}</div>
+    </section>
+    <section class="collections"><div class="collection-banner"><div class="collection-copy"><div class="section-kicker">СОБРАНО ДЛЯ ВАС</div><h2>Когда хочется<br>просто выбрать</h2><p>Найдите идеи для встречи и решите вместе, куда отправиться.</p><a href="#collections" class="button-light">Собрать подборку <span>↗</span></a></div><div class="collection-art" aria-hidden="true"><span class="collection-circle circle-a"></span><span class="collection-circle circle-b">вечер<br>в городе</span><span class="collection-circle circle-c">✳</span><span class="collection-sticker">планы<br>вместе</span><span class="sticker-spark">✦</span></div></div></section>`;
 }
 
 function renderList() {
@@ -454,7 +504,7 @@ async function route() {
   const hash = location.hash.slice(1);
   const [path, query] = hash.split('?');
   const routeName = path.split('/')[0] || 'home';
-  $$('.side-link').forEach(link => link.classList.toggle('active', link.getAttribute('href') === `#${routeName}`));
+  $$('.nav-link').forEach(link => link.classList.toggle('active', link.getAttribute('href') === `#${routeName}`));
   renderLoading();
 
   try {
@@ -497,12 +547,15 @@ function closeModal() {
   document.body.style.overflow = '';
 }
 
-function openCreate() {
+function openCreate(preset = {}) {
+  const presetOptions = Array.isArray(preset.options) ? preset.options.slice(0, 10) : [];
+  const optionFields = (presetOptions.length >= 2 ? presetOptions : ['', ''])
+    .map((option, index) => `<input class="text-input option-input" maxlength="100" required placeholder="Вариант ${index + 1}" value="${escapeHTML(option)}" />`).join('');
   $('#modal-content').innerHTML = `<div class="modal-eyebrow">НОВОЕ РЕШЕНИЕ</div><h2 id="modal-title">Создать голосование</h2><p class="modal-intro">Сформулируйте вопрос и добавьте варианты, между которыми выбирают участники.</p>
-    <form id="create-form"><label class="form-label" for="poll-title">Вопрос</label><input class="text-input" id="poll-title" maxlength="100" required placeholder="Например, куда пойдём в субботу?" />
-    <label class="form-label" for="poll-description">Описание <span class="optional">необязательно</span></label><textarea class="text-input text-area" id="poll-description" maxlength="1000" placeholder="Добавьте контекст для участников"></textarea>
-    <label class="form-label" for="poll-type">Тип голосования</label><select class="text-input" id="poll-type"><option value="single">Один вариант</option><option value="multiple">Несколько вариантов</option><option value="rating">Оценка каждого варианта от 1 до 10</option></select>
-    <label class="form-label">Варианты <span class="optional">от 2 до 10</span></label><div id="option-fields"><input class="text-input option-input" maxlength="100" required placeholder="Вариант 1" /><input class="text-input option-input" maxlength="100" required placeholder="Вариант 2" /></div>
+    <form id="create-form"><label class="form-label" for="poll-title">Вопрос</label><input class="text-input" id="poll-title" maxlength="100" required placeholder="Например, куда пойдём в субботу?" value="${escapeHTML(preset.title || '')}" />
+    <label class="form-label" for="poll-description">Описание <span class="optional">необязательно</span></label><textarea class="text-input text-area" id="poll-description" maxlength="1000" placeholder="Добавьте контекст для участников">${escapeHTML(preset.description || '')}</textarea>
+    <label class="form-label" for="poll-type">Тип голосования</label><select class="text-input" id="poll-type"><option value="single">Один вариант</option><option value="multiple">Несколько вариантов</option><option value="rating" ${preset.type === 'rating' ? 'selected' : ''}>Оценка каждого варианта от 1 до 10</option></select>
+    <label class="form-label">Варианты <span class="optional">от 2 до 10</span></label><div id="option-fields">${optionFields}</div>
     <button class="add-option" type="button" id="add-option">＋ Добавить вариант</button>
     <label class="form-label" for="poll-deadline">Срок завершения <span class="optional">необязательно</span></label><input class="text-input" id="poll-deadline" type="datetime-local" />
     <label class="form-label" for="poll-visibility">Доступ</label><select class="text-input" id="poll-visibility"><option value="private">Приватный — только по ссылке</option><option value="public">Публичный — видно участникам Picksy</option></select>
@@ -567,8 +620,9 @@ function openCreate() {
 
 async function submitVote() {
   const detail = $('#view-root');
-  const pollId = decodeURIComponent(location.hash.slice(1).split('?')[0].slice(5));
-  const inviteToken = detail.dataset.invite;
+  const voteButton = $('[data-action="submit-vote"]', detail);
+  const pollId = voteButton?.dataset.pollId || decodeURIComponent(location.hash.slice(1).split('?')[0].slice(5));
+  const inviteToken = new URLSearchParams(location.hash.split('?')[1] || '').get('invite') || inviteTokens[pollId] || detail.dataset.invite;
   const headers = inviteToken ? { 'x-poll-invite': inviteToken } : {};
   const selectedScores = $$('.rate-button.chosen', detail).map(button => ({ optionId: button.dataset.option, score: Number(button.dataset.score) }));
   const selectedOptions = $$('.option-check:checked', detail).map(input => input.value);
@@ -593,10 +647,10 @@ async function submitVote() {
   }
 }
 
-async function copyLink() {
+async function copyLink(pollIdOverride = '') {
   const rawHash = location.hash.slice(1);
   const [path] = rawHash.split('?');
-  const pollId = decodeURIComponent(path.slice(5));
+  const pollId = pollIdOverride || decodeURIComponent(path.slice(5));
   const poll = polls.find(item => item.id === pollId);
   if (!poll) return toast('Не удалось определить голосование.');
   let token = new URLSearchParams(rawHash.split('?')[1] || '').get('invite') || inviteTokens[pollId] || '';
@@ -611,7 +665,7 @@ async function copyLink() {
       return toast(error.message);
     }
   }
-  const url = `${location.href.split('#')[0]}#poll/${encodeURIComponent(pollId)}${token && poll.visibility === 'private' ? `?invite=${encodeURIComponent(token)}` : ''}`;
+  const url = `${location.origin}${location.pathname}#poll/${encodeURIComponent(pollId)}${token && poll.visibility === 'private' ? `?invite=${encodeURIComponent(token)}` : ''}`;
   try {
     await navigator.clipboard.writeText(url);
     toast('Ссылка скопирована.');
@@ -654,6 +708,11 @@ document.addEventListener('click', async event => {
     renderList();
     return;
   }
+  const ideaFilterButton = event.target.closest('[data-idea-filter]');
+  if (ideaFilterButton) {
+    ideaFilter = ideaFilterButton.dataset.ideaFilter;
+    return renderHome($('#search-input').value.trim());
+  }
   const category = event.target.closest('[data-place-category]')?.dataset.placeCategory;
   if (category) {
     placeCategory = category;
@@ -672,6 +731,19 @@ document.addEventListener('click', async event => {
   const action = event.target.closest('[data-action]')?.dataset.action;
   if (!action) return;
   if (action === 'create') return openCreate();
+  if (action === 'create-idea') {
+    const idea = planIdeas[Number(event.target.closest('[data-idea-index]')?.dataset.ideaIndex)];
+    if (!idea) return;
+    const options = planIdeas.filter(item => item.category === idea.category).map(item => item.title);
+    if (options.length < 2) options.push(idea.category === 'culture' ? 'Прогуляться по центру' : 'Выбрать другой план');
+    return openCreate({
+      title: 'Куда пойдём?',
+      description: 'Примеры идей — измените варианты под свою компанию.',
+      type: 'rating',
+      options
+    });
+  }
+  if (action === 'share-home-poll') return copyLink(event.target.closest('[data-poll-id]')?.dataset.pollId || '');
   if (action === 'retry') return route();
   if (action === 'focus-location') {
     $('#place-results')?.scrollIntoView({ behavior: 'smooth', block: 'center' });

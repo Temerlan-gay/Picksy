@@ -352,7 +352,14 @@ test('private invite rotation invalidates the previous link and the app serves i
 
   const homepage = await fetch(baseUrl);
   assert.equal(homepage.status, 200);
-  assert.match(await homepage.text(), /Picksy/);
+  const homepageHtml = await homepage.text();
+  assert.match(homepageHtml, /Picksy/);
+  assert.match(homepageHtml, /href="home\.css"/);
+  assert.match(homepageHtml, /Идеи/);
+  const homepageStyles = await fetch(`${baseUrl}/home.css`);
+  assert.equal(homepageStyles.status, 200);
+  const homepageScript = await fetch(`${baseUrl}/app.js`);
+  assert.match(await homepageScript.text(), /Ну что,/);
   const backendSource = await fetch(`${baseUrl}/server/index.js`);
   assert.equal(backendSource.status, 404);
 });

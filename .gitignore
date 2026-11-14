@@ -1,4 +1,10 @@
 node_modules/
+frontend/dist/
+backend/.venv/
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
 data/
 .env
 .env.*

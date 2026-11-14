@@ -1,0 +1,133 @@
+from datetime import datetime
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+
+
+class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    username: str
+    display_name: str
+    email: EmailStr
+
+
+class AuthResponse(BaseModel):
+    user: UserResponse | None
+
+
+class RegisterRequest(BaseModel):
+    display_name: str = Field(min_length=1, max_length=50)
+    username: str = Field(min_length=3, max_length=24, pattern=r"^[A-Za-z0-9_]+$")
+    email: EmailStr
+    password: str = Field(min_length=10, max_length=128)
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=128)
+
+
+class OptionCreate(BaseModel):
+    text: str = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_text_value(cls, value: object) -> object:
+        if isinstance(value, str):
+            return {"text": value}
+        return value
+
+    @model_validator(mode="after")
+    def trim_text(self) -> "OptionCreate":
+        self.text = self.text.strip()
+        if not self.text:
+            raise ValueError("Вариант не может быть пустым.")
+        return self
+
+
+class PollCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=100)
+    description: str = Field(default="", max_length=1000)
+    type: Literal["rating", "single", "multiple"] = "rating"
+    visibility: Literal["public", "private"] = "public"
+    options: list[OptionCreate] = Field(min_length=2, max_length=10)
+    deadline: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_poll(self) -> "PollCreate":
+        self.title = self.title.strip()
+        self.description = self.description.strip()
+        if not self.title:
+            raise ValueError("Добавьте вопрос для голосования.")
+        option_texts = [option.text.casefold() for option in self.options]
+        if len(set(option_texts)) != len(option_texts):
+            raise ValueError("Варианты должны отличаться друг от друга.")
+        if self.deadline and self.deadline.timestamp() <= datetime.now().timestamp():
+            raise ValueError("Срок завершения должен быть в будущем.")
+        return self
+
+
+class RatingInput(BaseModel):
+    option_id: str
+    score: int = Field(ge=1, le=10)
+
+
+class VoteRequest(BaseModel):
+    ratings: list[RatingInput] | None = Field(default=None, max_length=10)
+    option_ids: list[str] | None = Field(default=None, max_length=10)
+
+    @model_validator(mode="after")
+    def validate_vote_shape(self) -> "VoteRequest":
+        if bool(self.ratings) == bool(self.option_ids):
+            raise ValueError("Отправьте оценки или выбранные варианты.")
+        if self.ratings:
+            ids = [item.option_id for item in self.ratings]
+            if len(set(ids)) != len(ids):
+                raise ValueError("Каждый вариант можно оценить только один раз.")
+        if self.option_ids and len(set(self.option_ids)) != len(self.option_ids):
+            raise ValueError("Выбранные варианты не должны повторяться.")
+        return self
+
+
+class RatingResponse(BaseModel):
+    option_id: str
+    score: int
+
+
+class VoteResponse(BaseModel):
+    ratings: list[RatingResponse]
+    option_ids: list[str] = Field(default_factory=list)
+    updated_at: datetime
+
+
+class PollOptionResponse(BaseModel):
+    id: str
+    text: str
+    position: int
+    count: int
+    score: float | None
+
+
+class PollResponse(BaseModel):
+    id: str
+    owner_id: str
+    organizer: str
+    title: str
+    description: str
+    type: str
+    visibility: str
+    deadline: datetime | None
+    closed: bool
+    created_at: datetime
+    participant_count: int
+    vote_count: int
+    vote_change_allowed: bool
+    options: list[PollOptionResponse]
+    my_vote: VoteResponse | None
+    invite_token: str | None = None
+
+
+class PollListResponse(BaseModel):
+    polls: list[PollResponse]

@@ -1,13 +1,23 @@
 {
   "name": "picksy",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "frontend"
+  ],
   "scripts": {
-    "start": "node server/index.js",
-    "test": "node --test"
+    "dev": "concurrently -k -n api,web \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "python -m uvicorn app.main:app --reload --app-dir backend",
+    "dev:web": "npm run dev --workspace @picksy/frontend",
+    "build": "npm run build --workspace @picksy/frontend",
+    "test": "node --test && npm run test:backend",
+    "test:backend": "python -m pytest backend/tests -q"
   },
   "engines": {
-    "node": ">=22.13"
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
   }
 }
