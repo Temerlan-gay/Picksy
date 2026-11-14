@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
@@ -19,7 +19,7 @@ class AuthResponse(BaseModel):
 
 class RegisterRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=50)
-    username: str = Field(min_length=3, max_length=24, pattern=r"^[A-Za-z0-9_]+$")
+    username: str | None = Field(default=None, min_length=3, max_length=24, pattern=r"^[A-Za-z0-9_]+$")
     email: EmailStr
     password: str = Field(min_length=10, max_length=128)
 
@@ -70,7 +70,7 @@ class PollCreate(BaseModel):
         option_texts = [option.text.casefold() for option in self.options]
         if len(set(option_texts)) != len(option_texts):
             raise ValueError("Варианты должны отличаться друг от друга.")
-        if self.deadline and self.deadline.timestamp() <= datetime.now().timestamp():
+        if self.deadline and _as_utc(self.deadline) <= datetime.now(timezone.utc):
             raise ValueError("Срок завершения должен быть в будущем.")
         return self
 
@@ -179,9 +179,13 @@ class DecisionRoomCreate(BaseModel):
         self.question = self.question.strip()
         if not self.question:
             raise ValueError("Добавьте вопрос для комнаты.")
-        if self.deadline and self.deadline.timestamp() <= datetime.now().timestamp():
+        if self.deadline and _as_utc(self.deadline) <= datetime.now(timezone.utc):
             raise ValueError("Срок голосования должен быть в будущем.")
         return self
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
 
 class DecisionJoinRequest(BaseModel):

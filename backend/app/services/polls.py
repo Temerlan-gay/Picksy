@@ -20,7 +20,8 @@ from app.schemas import (
 def _is_closed(poll: Poll) -> bool:
     now = datetime.now(timezone.utc)
     deadline = poll.deadline
-    deadline_passed = deadline is not None and deadline.replace(tzinfo=timezone.utc) <= now
+    deadline_utc = deadline.replace(tzinfo=timezone.utc) if deadline and deadline.tzinfo is None else deadline.astimezone(timezone.utc) if deadline else None
+    deadline_passed = deadline_utc is not None and deadline_utc <= now
     return poll.closed_at is not None or deadline_passed
 
 

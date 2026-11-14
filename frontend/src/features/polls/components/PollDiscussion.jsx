@@ -30,7 +30,7 @@ export function PollDiscussion({ poll, user }) {
     }
 
     refresh();
-    const timer = window.setInterval(refresh, 10_000);
+    const timer = window.setInterval(refresh, 3_000);
     return () => {
       active = false;
       window.clearInterval(timer);

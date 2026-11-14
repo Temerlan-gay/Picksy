@@ -334,7 +334,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .main-nav { gap: 9px; }
   .nav-link { font-size: 9px; }
   .hero h1 { font-size: 57px; }
-  .timer { display: none; }
+  .timer { display: inline; }
   .circle-a { right: 47px; }
   .circle-b { right: -17px; }
   .collection-sticker { right: 94px; }
@@ -374,6 +374,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .room-checkbox input { width: auto; }
 .room-invitation { display: flex; align-items: center; justify-content: space-between; gap: 24px; width: fit-content; padding: 18px; border: 1px solid #e4e8df; border-radius: 16px; background: #fbfcf9; }
 .room-invitation > div { display: grid; gap: 7px; }
+.room-share-url { max-width: 38ch; overflow-wrap: anywhere; color: var(--coral-dark, #ba503d); font-size: .82rem; }
 .room-invitation strong { font-size: 1.8rem; letter-spacing: .12em; }
 .room-invitation small, .room-invitation span { color: var(--muted, #718078); }
 .room-invitation svg, .poll-share-qr svg { padding: 8px; border-radius: 10px; background: #fff; }

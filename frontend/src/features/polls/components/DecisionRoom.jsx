@@ -2,8 +2,15 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { beginRoomRound, decideRoomProposal, enterRoomByCode, getRoom, joinRoom, proposeRoomOption, startNextRoomRound, startRoomRound, voteInRoomRound } from '../api/roomsApi.js';
+import { formatCountdown } from '../../../shared/time.js';
 
 const methodNames = { majority: 'Большинство', unanimity: 'Единогласие', no_objections: 'Без возражений' };
+
+function localDateTimeMinimum() {
+  const now = new Date(Date.now() + 60_000);
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  return now.toISOString().slice(0, 16);
+}
 
 export function GuestJoinPage() {
   const [searchParams] = useSearchParams();
@@ -42,7 +49,7 @@ export function CreateDecisionRoomModal({ onClose, onCreate }) {
     <form className="auth-form" onSubmit={submit}><label htmlFor="room-question">Вопрос</label><input id="room-question" name="question" required maxLength="200" placeholder="Куда пойдём в пятницу?" />
       <label htmlFor="room-method">Метод решения</label><select id="room-method" name="method" defaultValue="majority"><option value="majority">Большинство</option><option value="unanimity">Единогласие</option><option value="no_objections">Без возражений</option></select>
       <label htmlFor="room-visibility">Доступ</label><select id="room-visibility" name="visibility" defaultValue="private"><option value="public">Публичная комната</option><option value="private">Личная · вход по коду или QR-коду</option></select>
-      <label htmlFor="room-deadline">Срок голосования <span className="optional">сохраняется как настройка</span></label><input id="room-deadline" name="deadline" type="datetime-local" />
+      <label htmlFor="room-deadline">Срок завершения голосования <span className="optional">по истечении раунд завершится</span></label><input id="room-deadline" name="deadline" type="datetime-local" min={localDateTimeMinimum()} />
       <label className="room-checkbox"><input type="checkbox" name="hide_results" /> Скрывать содержание голосов до завершения</label>
       {error && <p className="form-error" role="alert">{error}</p>}<button className="button-dark auth-submit" disabled={busy}>{busy ? 'Создаём…' : 'Создать комнату'} <span>→</span></button>
     </form>
@@ -54,7 +61,7 @@ export function DecisionRoomsPage({ rooms, onCreate }) {
     {rooms.length ? <div className="poll-grid">{rooms.map(room => <Link className="poll-list-card" key={room.id} to={`/rooms/${room.id}`}><div className="section-kicker"><span className="live-dot" /> {room.status === 'gathering' ? 'СБОР' : room.status === 'preparation' ? '\u041f\u043e\u0434\u0433\u043e\u0442\u043e\u0432\u043a\u0430' : room.status === 'voting' ? 'ГОЛОСОВАНИЕ' : 'ИТОГ ГОТОВ'}</div><h2>{room.question}</h2><p>{methodNames[room.method]} · {room.members.length} участников</p><small>{room.rounds.length} раундов</small></Link>)}</div> : <div className="empty-card"><h2>Комнат пока нет</h2><p>Создайте комнату и пригласите участников по ссылке.</p></div>}</section>;
 }
 
-export function DecisionRoomPage({ user, onRefreshRooms, onToast }) {
+export function DecisionRoomPage({ onToast }) {
   const { roomId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const inviteToken = searchParams.get('invite') || '';
@@ -64,6 +71,7 @@ export function DecisionRoomPage({ user, onRefreshRooms, onToast }) {
   const [error, setError] = useState('');
   const [selected, setSelected] = useState('');
   const [evaluations, setEvaluations] = useState({});
+  const [now, setNow] = useState(() => Date.now());
 
   const reload = useCallback(async () => {
     const response = await getRoom(roomId, inviteToken);
@@ -73,15 +81,18 @@ export function DecisionRoomPage({ user, onRefreshRooms, onToast }) {
       setSearchParams({}, { replace: true });
     }
     setRoom(current);
-    await onRefreshRooms();
-  }, [roomId, inviteToken, onRefreshRooms, setSearchParams]);
+  }, [roomId, inviteToken, setSearchParams]);
 
   useEffect(() => { reload().catch(err => setError(err.message)); }, [reload]);
   useEffect(() => {
     if (!room) return undefined;
-    const timer = window.setInterval(() => reload().catch(() => {}), 5000);
+    const timer = window.setInterval(() => reload().catch(() => {}), 3000);
     return () => window.clearInterval(timer);
   }, [room?.status, reload]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   async function run(action, success) {
     setBusy(true); setError('');
@@ -119,10 +130,10 @@ export function DecisionRoomPage({ user, onRefreshRooms, onToast }) {
   const joinUrl = `${window.location.origin}/join?code=${encodeURIComponent(room.join_code)}`;
   return <section className="detail-page decision-room"><Link to={room.is_guest ? '/join' : '/rooms'} className="all-ideas">← {room.is_guest ? 'Выйти из комнаты' : 'Все комнаты'}</Link><article className="active-vote">
     <div className="section-kicker"><span className="live-dot" /> {room.status === 'gathering' ? 'СБОР УЧАСТНИКОВ И ВАРИАНТОВ' : room.status === 'preparation' ? 'ПОДГОТОВКА' : room.status === 'voting' ? 'ГОЛОСОВАНИЕ' : `РЕЗУЛЬТАТ · РАУНД ${lastRound.number}`}</div>
-    <h1>{room.question}</h1><p className="vote-subtitle">Организатор: {room.owner_name} · Метод: {methodNames[room.method]}{room.deadline && ` · Срок: ${new Date(room.deadline).toLocaleString('ru-RU')}`}</p>
+    <h1>{room.question}</h1><p className="vote-subtitle">Организатор: {room.owner_name} · Метод: {methodNames[room.method]}{room.deadline && <> · Срок: {new Date(room.deadline).toLocaleString('ru-RU')} · {Date.parse(room.deadline) <= now ? 'время вышло' : `осталось ${formatCountdown(room.deadline, now)}`}</>}</p>
     {room.status === 'gathering' && <>
       <div className="room-toolbar"><strong>Участники · {room.members.length}</strong>{room.is_owner && <button className="copy-link" onClick={copyInvitation} disabled={busy}>Скопировать приглашение</button>}</div>
-      <div className="room-invitation"><div><span>Код комнаты</span><strong>{room.join_code}</strong><small>{room.visibility === 'private' ? 'Личная · участникам нужен этот код' : 'Публичная · можно делиться кодом и ссылкой'}</small><button className="copy-link" type="button" onClick={copyRoomCode}>Скопировать код</button></div><QRCodeSVG value={joinUrl} size={148} level="M" includeMargin aria-label={`QR-код входа в комнату ${room.join_code}`} /></div>
+      <div className="room-invitation"><div><span>Код комнаты</span><strong>{room.join_code}</strong><small>{room.visibility === 'private' ? 'Личная · участникам нужен этот код' : 'Публичная · можно делиться кодом и ссылкой'}</small><a className="room-share-url" href={joinUrl}>{joinUrl}</a><button className="copy-link" type="button" onClick={copyRoomCode}>Скопировать код</button></div><QRCodeSVG value={joinUrl} size={148} level="M" includeMargin aria-label={`QR-код входа в комнату ${room.join_code}`} /></div>
       <div className="room-members">{room.members.map(member => <span key={member.user_id}>{member.display_name}{member.is_owner ? ' · организатор' : ''}</span>)}</div>
       <form className="room-proposal-form" onSubmit={event => { event.preventDefault(); if (optionText.trim()) run(() => proposeRoomOption(room.id, optionText.trim()), 'Вариант предложен.').then(ok => { if (ok) setOptionText(''); }); }}>
         <label htmlFor="room-option">Предложить вариант</label><div><input id="room-option" value={optionText} onChange={event => setOptionText(event.target.value)} maxLength="160" placeholder="Например, пиццерия на набережной" /><button className="button-dark" disabled={busy || !optionText.trim()}>Предложить</button></div>

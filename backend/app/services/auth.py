@@ -53,10 +53,16 @@ def password_matches(password: str, stored_hash: str) -> bool:
 
 def create_account(db: Session, data: RegisterRequest) -> tuple[User, str]:
     email = str(data.email).strip().lower()
-    username = data.username.strip().lower()
+    username_base = re.sub(r"[^a-z0-9_]", "_", (data.username or email.split("@", 1)[0]).strip().lower()).strip("_")[:20] or "user"
+    username = username_base
+    suffix = 1
+    while get_user_by_username(db, username) is not None:
+        tail = f"_{suffix}"
+        username = f"{username_base[:24 - len(tail)]}{tail}"
+        suffix += 1
     if get_user_by_email(db, email):
         raise HTTPException(status.HTTP_409_CONFLICT, "Этот email уже зарегистрирован.")
-    if get_user_by_username(db, username):
+    if data.username and get_user_by_username(db, data.username.strip().lower()):
         raise HTTPException(status.HTTP_409_CONFLICT, "Это имя пользователя уже занято.")
     user = User(
         email=email,

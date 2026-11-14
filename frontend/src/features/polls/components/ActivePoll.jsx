@@ -1,17 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { PollDiscussion } from './PollDiscussion.jsx';
+import { formatCountdown } from '../../../shared/time.js';
 
 const optionEmojis = ['🍜', '🎳', '☕', '🌿', '🎲', '🎨', '🍕', '🌅', '⛸️', '🎭'];
-
-function getTimeLeft(deadline) {
-  if (!deadline) return 'без срока';
-  const remaining = Math.max(0, Date.parse(deadline) - Date.now());
-  const hours = String(Math.floor(remaining / 3_600_000)).padStart(2, '0');
-  const minutes = String(Math.floor(remaining / 60_000) % 60).padStart(2, '0');
-  const seconds = String(Math.floor(remaining / 1000) % 60).padStart(2, '0');
-  return `${hours}:${minutes}:${seconds}`;
-}
 
 export function ActivePoll({ poll, user, onVote, onCopyLink, onGetShareUrl, onClose, canClose = false }) {
   const existingRatings = useMemo(() => new Map((poll.my_vote?.ratings || []).map(item => [item.option_id, item.score])), [poll]);
@@ -20,12 +12,19 @@ export function ActivePoll({ poll, user, onVote, onCopyLink, onGetShareUrl, onCl
   const [error, setError] = useState('');
   const [choices, setChoices] = useState(() => poll.my_vote?.option_ids || []);
   const [shareUrl, setShareUrl] = useState('');
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!poll.deadline) return undefined;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [poll.deadline]);
   useEffect(() => {
     setRatings(Object.fromEntries((poll.my_vote?.ratings || []).map(item => [item.option_id, item.score])));
     setChoices(poll.my_vote?.option_ids || []);
   }, [poll.id, poll.my_vote]);
   const voted = Boolean(poll.my_vote);
-  const closed = poll.closed;
+  const deadlineExpired = Boolean(poll.deadline && Date.parse(poll.deadline) <= now);
+  const closed = poll.closed || deadlineExpired;
   const totalVotes = poll.vote_count || 0;
   const bestScore = poll.type === 'rating' ? Math.max(0, ...poll.options.map(option => option.score || 0)) : Math.max(0, ...poll.options.map(option => option.count));
   const leaders = totalVotes ? poll.options.filter(option => (poll.type === 'rating' ? option.score : option.count) === bestScore) : [];
@@ -93,7 +92,7 @@ export function ActivePoll({ poll, user, onVote, onCopyLink, onGetShareUrl, onCl
           </span>
           <strong>{poll.vote_count}</strong> {poll.vote_count === 1 ? 'уже выбрал' : 'уже выбрали'}
         </span>
-        <span className="timer"><span>◷</span> ещё {getTimeLeft(poll.deadline)}</span>
+        <span className="timer"><span>◷</span> {closed ? 'завершено' : poll.deadline ? `осталось ${formatCountdown(poll.deadline, now)}` : 'без срока'}</span>
         <div className="share-actions">{(poll.visibility !== 'private' || user.id === poll.owner_id) && <button className="copy-link" onClick={() => onCopyLink(poll.id)}>{'\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0441\u0441\u044b\u043b\u043a\u0443'}</button>}{(poll.visibility !== 'private' || user.id === poll.owner_id) && <button className="copy-link" onClick={showShareQr}>QR</button>}</div>
         {shareUrl && <div className="poll-share-qr"><QRCodeSVG value={shareUrl} size={144} level="M" includeMargin /><span>{'\u041e\u0442\u0441\u043a\u0430\u043d\u0438\u0440\u0443\u0439\u0442\u0435 QR-\u043a\u043e\u0434, \u0447\u0442\u043e\u0431\u044b \u043e\u0442\u043a\u0440\u044b\u0442\u044c \u0433\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043d\u0438\u0435'}</span><button className="copy-link" onClick={() => setShareUrl('')}>{'\u0421\u043a\u0440\u044b\u0442\u044c QR'}</button></div>}
       </div>

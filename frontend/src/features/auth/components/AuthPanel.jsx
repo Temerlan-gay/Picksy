@@ -70,8 +70,6 @@ export function AuthPanel({ onSubmit, onGoogleCredential, error }) {
           {mode === 'register' && <>
             <label htmlFor="display-name">Ваше имя</label>
             <input id="display-name" name="display_name" autoComplete="name" minLength="1" maxLength="50" required placeholder="Как к вам обращаться?" />
-            <label htmlFor="username">Имя пользователя</label>
-            <input id="username" name="username" autoComplete="username" minLength="3" maxLength="24" pattern="[A-Za-z0-9_]{3,24}" required placeholder="Ваше имя" />
           </>}
           <label htmlFor="email">Email</label>
           <input id="email" name="email" type="email" autoComplete="email" maxLength="254" required placeholder="you@example.com" />

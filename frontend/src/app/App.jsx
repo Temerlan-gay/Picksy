@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { AuthPanel } from '../features/auth/components/AuthPanel.jsx';
 import { getCurrentUser, login, loginWithGoogle, logout, register } from '../features/auth/api/authApi.js';
@@ -11,7 +11,6 @@ import { closePoll, createPoll, createPollInvitation, getPoll, listPolls, submit
 import { createRoom, listRooms } from '../features/polls/api/roomsApi.js';
 import { getPollInviteToken, hasRoomGuestToken, savePollInviteToken } from '../shared/api/client.js';
 
-const noRefresh = async () => {};
 const noToast = () => {};
 
 function Header({ user, activeCount, onProfile }) {
@@ -123,6 +122,7 @@ export default function App() {
   const [filter, setFilter] = useState('all');
   const [modal, setModal] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const syncing = useRef(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -159,17 +159,53 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return undefined;
+    let active = true;
+    const sync = async () => {
+      if (!active || document.visibilityState !== 'visible' || syncing.current) return;
+      syncing.current = true;
+      try {
+        await Promise.all([refreshPolls(), refreshRooms()]);
+      } catch {
+        // Keep the last known data visible during a temporary network interruption.
+      } finally {
+        syncing.current = false;
+      }
+    };
+    const timer = window.setInterval(sync, 3000);
+    document.addEventListener('visibilitychange', sync);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', sync);
+    };
+  }, [user?.id, refreshPolls, refreshRooms]);
+
+  useEffect(() => {
+    if (!user) return undefined;
     const pollId = location.pathname.match(/^\/polls\/([0-9a-f-]{36})$/i)?.[1];
     if (!pollId) return undefined;
     const inviteToken = new URLSearchParams(location.search).get('invite') || '';
     if (inviteToken) savePollInviteToken(pollId, inviteToken);
-    if (polls.some(poll => poll.id === pollId)) return undefined;
     let active = true;
-    getPoll(pollId, inviteToken)
-      .then(({ poll }) => { if (active) setPolls(current => current.some(item => item.id === poll.id) ? current : [poll, ...current]); })
-      .catch(requestError => { if (active) setError(requestError.message); });
-    return () => { active = false; };
-  }, [user, location.pathname, location.search, polls]);
+    let firstRequest = true;
+    let inFlight = false;
+    const syncPoll = async () => {
+      if (inFlight || document.visibilityState !== 'visible') return;
+      inFlight = true;
+      try {
+        const { poll } = await getPoll(pollId, inviteToken);
+        if (active) setPolls(current => [poll, ...current.filter(item => item.id !== poll.id)]);
+      } catch (requestError) {
+        if (active && firstRequest) setError(requestError.message);
+      } finally {
+        firstRequest = false;
+        inFlight = false;
+      }
+    };
+    syncPoll();
+    const timer = window.setInterval(syncPoll, 3000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [user?.id, location.pathname, location.search]);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -297,7 +333,7 @@ export default function App() {
 
   if (location.pathname === '/join') return <main className="shell guest-shell"><GuestJoinPage /></main>;
   const guestRoomId = location.pathname.match(/^\/rooms\/([0-9a-f-]{36})$/i)?.[1];
-  if (!user && guestRoomId && hasRoomGuestToken(guestRoomId)) return <main className="shell guest-shell"><DecisionRoomPage user={null} onRefreshRooms={noRefresh} onToast={noToast} /></main>;
+  if (!user && guestRoomId && hasRoomGuestToken(guestRoomId)) return <main className="shell guest-shell"><DecisionRoomPage onToast={noToast} /></main>;
   if (loading) return <div className="loading-screen">Decido загружает ваши решения…</div>;
   if (!user) return <AuthPanel onSubmit={handleAuth} onGoogleCredential={handleGoogleAuth} error={authError || error} />;
   if (error) return <main className="shell"><div className="error-screen"><h1>Не удалось загрузить Decido</h1><p>{error}</p><button className="button-dark" onClick={() => window.location.reload()}>Попробовать ещё раз</button></div></main>;
@@ -309,7 +345,7 @@ export default function App() {
       <Route path="/polls" element={<PollsPage polls={polls} onCreate={showCreate} />} />
       <Route path="/polls/:pollId" element={<PollDetailPage poll={currentPoll} onVote={handleVote} onCopy={handleCopyLink} onGetShareUrl={getPollShareUrl} onClose={handleClosePoll} user={user} />} />
       <Route path="/rooms" element={<DecisionRoomsPage rooms={rooms} onCreate={showCreateRoom} />} />
-      <Route path="/rooms/:roomId" element={<DecisionRoomPage user={user} onRefreshRooms={refreshRooms} onToast={setToast} />} />
+      <Route path="/rooms/:roomId" element={<DecisionRoomPage onToast={setToast} />} />
       <Route path="/collections" element={<CollectionsPage onCreate={showCreate} />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

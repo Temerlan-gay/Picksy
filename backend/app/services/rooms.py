@@ -41,6 +41,28 @@ def _result(round_: DecisionRound) -> dict | None:
     return json.loads(round_.result_json) if round_.result_json else None
 
 
+def _deadline_passed(deadline: datetime | None) -> bool:
+    if deadline is None:
+        return False
+    deadline_utc = deadline.replace(tzinfo=timezone.utc) if deadline.tzinfo is None else deadline.astimezone(timezone.utc)
+    return deadline_utc <= datetime.now(timezone.utc)
+
+
+def _finalize_expired_round(db: Session, room: DecisionRoom) -> None:
+    if not room.rounds or not _deadline_passed(room.deadline):
+        return
+    round_ = room.rounds[-1]
+    if round_.status != "voting":
+        return
+    result = _calculate_result(round_)
+    if len(round_.ballots) < len(round_.participants):
+        result["explanation"] = (
+            f"Срок вышел. Итог рассчитан по отправленным голосам: "
+            f"{len(round_.ballots)} из {len(round_.participants)}. Неподанные голоса не учитывались."
+        )
+    finish_round(db, round_, json.dumps(result, ensure_ascii=False), datetime.now(timezone.utc))
+
+
 def _serialize_round(round_: DecisionRound, user_id: str) -> dict:
     ballot_by_user = {ballot.user_id: ballot for ballot in round_.ballots}
     completed = round_.status == "result"
@@ -124,7 +146,10 @@ def enter_room_by_code(db: Session, data: RoomGuestEnterRequest) -> dict:
 
 
 def list_rooms(db: Session, user: User) -> list[dict]:
-    return [_serialize_room(room, user) for room in list_rooms_for_user(db, user.id)]
+    rooms = list_rooms_for_user(db, user.id)
+    for room in rooms:
+        _finalize_expired_round(db, room)
+    return [_serialize_room(room, user) for room in rooms]
 
 
 def create_room_invitation(db: Session, user: User, room_id: str) -> dict:
@@ -139,9 +164,11 @@ def create_room_invitation(db: Session, user: User, room_id: str) -> dict:
 
 
 def get_room_view(db: Session, user: User, room_id: str, invite_token: str | None = None) -> dict:
-    room = get_room(db, room_id)
+    room = get_room(db, room_id, lock=True)
     if room is None or not _authorized(room, user.id, invite_token):
         _fail(status.HTTP_404_NOT_FOUND, "Комната не найдена.")
+    _finalize_expired_round(db, room)
+    room = get_room(db, room_id)
     return _serialize_room(room, user)
 
 
@@ -214,6 +241,8 @@ def begin_voting(db: Session, user: User, room_id: str, round_id: str) -> dict:
         _fail(status.HTTP_403_FORBIDDEN, "Начать голосование может только организатор.")
     if round_ is None or round_.status != "preparation":
         _fail(status.HTTP_409_CONFLICT, "Раунд не находится на этапе подготовки.")
+    if _deadline_passed(room.deadline):
+        _fail(status.HTTP_409_CONFLICT, "Срок голосования уже истёк. Создайте комнату с будущим сроком.")
     begin_round(db, round_)
     return _serialize_room(get_room(db, room.id), user)
 
@@ -223,8 +252,11 @@ def submit_ballot(db: Session, user: User, room_id: str, round_id: str, data: De
     round_ = get_round(db, room_id, round_id, lock=True)
     if room is None or round_ is None:
         _fail(status.HTTP_404_NOT_FOUND, "Раунд не найден.")
+    was_voting = round_.status == "voting"
+    _finalize_expired_round(db, room)
     if round_.status != "voting":
-        _fail(status.HTTP_409_CONFLICT, "Голосование уже завершено.")
+        detail = "Срок голосования истёк. Ваш голос не был засчитан." if was_voting and _deadline_passed(room.deadline) else "Голосование уже завершено."
+        _fail(status.HTTP_409_CONFLICT, detail)
     if not any(participant.user_id == user.id for participant in round_.participants):
         _fail(status.HTTP_403_FORBIDDEN, "Вы не входите в зафиксированный состав этого раунда.")
     valid_ids = {option.id for option in round_.options}
@@ -272,7 +304,7 @@ def _calculate_result(round_: DecisionRound) -> dict:
             explanation = "Победил вариант с наибольшим числом голосов." if kind == "winner" else "У нескольких вариантов одинаковое число голосов — это ничья." if kind == "tie" else "Голоса не поданы."
         else:
             choices = {ballot["option_id"] for ballot in ballots}
-            leaders = [next(iter(choices))] if len(choices) == 1 else []
+            leaders = [next(iter(choices))] if len(choices) == 1 and len(ballots) == len(round_.participants) else []
             kind = "winner" if leaders else "no_consensus"
             explanation = "Все участники выбрали один и тот же вариант." if leaders else "Участники выбрали разные варианты, единогласия нет."
     else:
@@ -280,7 +312,7 @@ def _calculate_result(round_: DecisionRound) -> dict:
             for evaluation in ballot["evaluations"]:
                 if evaluation["objection"]:
                     by_id[evaluation["option_id"]]["objections"] += 1
-        leaders = [o["id"] for o in options if o["objections"] == 0]
+        leaders = [o["id"] for o in options if o["objections"] == 0] if ballots else []
         kind = "acceptable" if leaders else "no_consensus"
         explanation = "Есть варианты, против которых никто не возразил." if leaders else "Против каждого варианта есть хотя бы одно возражение."
     return {"kind": kind, "winner_ids": leaders, "options": options,

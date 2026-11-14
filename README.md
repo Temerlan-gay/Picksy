@@ -83,7 +83,7 @@ The API is available at <http://127.0.0.1:8000>; interactive API docs are at <ht
 1. Create an account in the browser. FastAPI validates the input, hashes the password, stores the account, and sets an HTTP-only session cookie. Google sign-in is also available when the OAuth client is configured.
 2. Create a poll with a question, two or more options, a voting type, and an optional deadline.
 3. Share the poll URL with participants. Participants sign in, open the poll, and submit a choice or ratings from 1 to 10.
-4. FastAPI validates and stores each ballot in SQL tables. The React app reloads the poll and displays counts and rating averages from the API response.
+4. FastAPI validates and stores each ballot in SQL tables. Poll pages synchronize every three seconds, and deadlines close voting automatically when they expire.
 5. The owner can close the poll. The backend rejects further ballots and the UI shows the winner, a tie, or that nobody voted.
 
 Participants can discuss the choices in the active poll card. Each non-owner can post two messages per poll; the poll owner can answer without that cap, with server-side rate limits to prevent spam. The discussion remains in PostgreSQL and refreshes in the browser every ten seconds.
@@ -94,7 +94,7 @@ The poll creation form now lets the organizer choose public or private access. A
 
 ## Group decision rooms
 
-Open **Комнаты** to create a VETO decision room. The organizer sets a question, access mode, and majority, unanimity, or no-objections method. Every room gets an eight-character entry code and a QR code. Participants scan it or open the invitation, enter a display name, and join without creating an account. They can then suggest options; the organizer accepts or rejects them. A round can start once there is at least one other participant and one accepted option. The server snapshots the roster and choices before voting begins.
+Open **Комнаты** to create a VETO decision room. The organizer sets a question, access mode, deadline, and majority, unanimity, or no-objections method. Every room gets an eight-character entry code, a QR code, and a shareable entry link. Participants scan it or open the invitation, enter their name, and join without creating an account. They can then suggest options; the organizer accepts or rejects them. A round can start once there is at least one other participant and one accepted option. The server snapshots the roster and choices before voting begins. Room pages synchronize every three seconds; the server closes an active round when its deadline expires and calculates results from submitted ballots only.
 
 Each person in the snapshot, including the organizer, can submit one complete ballot. Results are saved when the last participant votes. Hidden-result rounds reveal progress and voter status while ballots are still pending, then show the result distribution. Previous rounds stay in the room history, and the organizer can prepare another round with the same accepted options and room members.
 
