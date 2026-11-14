@@ -1,0 +1,40 @@
+{
+  "id": null,
+  "uid": "decido-api",
+  "title": "Decido API",
+  "tags": ["decido", "api"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Requests per second by status",
+      "type": "timeseries",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "targets": [{ "expr": "sum by (status) (rate(http_requests_total{job=\"decido-api\"}[5m]))", "legendFormat": "{{status}}", "refId": "A" }]
+    },
+    {
+      "id": 2,
+      "title": "P95 request latency",
+      "type": "timeseries",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"decido-api\"}[5m])))", "legendFormat": "p95", "refId": "A" }]
+    },
+    {
+      "id": 3,
+      "title": "API availability",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 9 },
+      "targets": [{ "expr": "up{job=\"decido-api\"}", "legendFormat": "up", "refId": "A" }]
+    },
+    {
+      "id": 4,
+      "title": "5xx requests per second",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 9 },
+      "targets": [{ "expr": "sum(rate(http_requests_total{job=\"decido-api\",status=~\"5..\"}[5m]))", "legendFormat": "5xx", "refId": "A" }]
+    }
+  ]
+}

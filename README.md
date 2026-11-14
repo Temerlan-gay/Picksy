@@ -24,6 +24,8 @@ frontend/
 
 The browser sends requests to `/api`. Vite proxies API requests to FastAPI in development. Password hashing, sessions, poll permissions, validation, vote persistence, result calculation, and poll closing are handled by the backend. SQLAlchemy creates the schema on startup. The default database is `data/decido.sqlite`; it is separate from the legacy Picksy database.
 
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the service diagram, release and rollback steps, migration notes, and diagnostics endpoints. GitHub Actions runs backend integration tests, Node regression tests, and the frontend production build on pushes and pull requests.
+
 ## Requirements
 
 - Node.js 20 or newer and npm.
@@ -57,6 +59,8 @@ python -m pip install -r backend/requirements-dev.txt
 
 Optionally copy `.env.example` to `.env` and adjust the backend settings. The default configuration works locally without a `.env` file.
 
+To load a local walkthrough account and an active rating poll with three places from the reference design, run `ALLOW_DEMO_SEED=true python backend/scripts/seed_demo.py` (PowerShell: `$env:ALLOW_DEMO_SEED='true'; python backend/scripts/seed_demo.py`). Sign in with `demo@picksy.local` / `picksy-demo-only`. The seed script refuses to run in Vercel or when `APP_ENV=production` is set.
+
 ## Run
 
 With the Python environment activated, from the project root:
@@ -72,7 +76,7 @@ npm run dev:web
 npm run dev:api
 ```
 
-The API is available at <http://127.0.0.1:8000>; interactive API docs are at <http://127.0.0.1:8000/docs>.
+The API is available at <http://127.0.0.1:8000>; interactive API docs are at <http://127.0.0.1:8000/api/docs>.
 
 ## First end-to-end flow
 
@@ -89,10 +93,12 @@ The three supported types are single choice, multiple choice, and 1–10 ratings
 Environment variables are read by FastAPI:
 
 - `DATABASE_URL` — SQLAlchemy URL; defaults to `sqlite:///data/decido.sqlite`.
+- `DATABASE_URL_POOLED` — optional pooled PostgreSQL connection string, preferred for serverless deployment.
 - `SESSION_TTL_DAYS` — session lifetime (14 by default).
 - `COOKIE_SECURE` — set to `true` when serving over HTTPS.
 - `CORS_ORIGINS` — comma-separated browser origins when frontend and API use separate hosts.
 - `VITE_API_URL` — optional API origin for the built frontend; keep empty when Nginx proxies `/api/` on the same origin.
+- `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID` — the public Web OAuth client ID used to verify Google sign-in. The Google consent screen can restrict sign-in to configured test accounts while it is in Testing mode.
 
 ## Verify
 
@@ -115,6 +121,8 @@ docker compose --env-file .env.docker up --build
 ```
 
 Open <http://localhost:8000>. The PostgreSQL data is stored in the `postgres_data` Docker volume. Stop the containers with `docker compose --env-file .env.docker down`; keep the volume to retain poll data.
+
+Prometheus scrapes API metrics at <http://127.0.0.1:9090>; Grafana is available at <http://127.0.0.1:3001> with the provisioned Decido API dashboard. Set `GRAFANA_ADMIN_PASSWORD` in `.env.docker` before starting the monitoring services. Both monitoring ports bind to localhost.
 
 ## VM deployment
 

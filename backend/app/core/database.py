@@ -36,5 +36,8 @@ def create_database_schema() -> None:
     if "google_sub" not in {column["name"] for column in inspect(engine).get_columns("users")}:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE users ADD COLUMN google_sub VARCHAR(255)"))
+    if "subtitle" not in {column["name"] for column in inspect(engine).get_columns("poll_options")}:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE poll_options ADD COLUMN subtitle VARCHAR(160) NOT NULL DEFAULT ''"))
     with engine.begin() as connection:
         connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_sub ON users (google_sub)"))

@@ -35,6 +35,7 @@ class GoogleCredentialRequest(BaseModel):
 
 class OptionCreate(BaseModel):
     text: str = Field(min_length=1, max_length=100)
+    subtitle: str = Field(default="", max_length=160)
 
     @model_validator(mode="before")
     @classmethod
@@ -46,6 +47,7 @@ class OptionCreate(BaseModel):
     @model_validator(mode="after")
     def trim_text(self) -> "OptionCreate":
         self.text = self.text.strip()
+        self.subtitle = self.subtitle.strip()
         if not self.text:
             raise ValueError("Вариант не может быть пустым.")
         return self
@@ -109,6 +111,7 @@ class VoteResponse(BaseModel):
 class PollOptionResponse(BaseModel):
     id: str
     text: str
+    subtitle: str = ""
     position: int
     count: int
     score: float | None

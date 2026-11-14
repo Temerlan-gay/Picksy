@@ -35,6 +35,7 @@ def _serialize_poll(poll: Poll, user_id: str, invite_token: str | None = None) -
             PollOptionResponse(
                 id=option.id,
                 text=option.text,
+                subtitle=option.subtitle,
                 position=option.position,
                 count=len(option_ratings) if poll.type == "rating" else option_votes,
                 score=average,
@@ -109,7 +110,7 @@ def create_poll(db: Session, user: User, data: PollCreate) -> PollResponse:
         invite_token_hash=hashlib.sha256(invite_token.encode("utf-8")).hexdigest(),
         allow_vote_change=1,
         options=[
-            PollOption(text=option.text, position=position)
+            PollOption(text=option.text, subtitle=option.subtitle, position=position)
             for position, option in enumerate(data.options)
         ],
     )

@@ -1,0 +1,17 @@
+groups:
+  - name: decido-api
+    rules:
+      - alert: DecidoApiUnavailable
+        expr: up{job="decido-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Decido API metrics endpoint is unavailable
+      - alert: DecidoHighServerErrorRate
+        expr: sum(rate(http_requests_total{job="decido-api",status=~"5.."}[5m])) / clamp_min(sum(rate(http_requests_total{job="decido-api"}[5m])), 0.001) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 5% of Decido API requests return 5xx

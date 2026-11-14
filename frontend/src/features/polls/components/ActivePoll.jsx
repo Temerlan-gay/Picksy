@@ -101,7 +101,7 @@ export function ActivePoll({ poll, onVote, onCopyLink, onClose, canClose = false
               <span className="option-number">{String(index + 1).padStart(2, '0')}</span>
               <div className="option-label">
                 <strong className="option-name">{option.text}</strong>
-                <span className="option-location">{poll.type === 'rating' ? 'Оцените от 1 до 10' : 'Вариант голосования'}</span>
+                <span className="option-location">{option.subtitle || (poll.type === 'rating' ? 'Оцените от 1 до 10' : 'Вариант голосования')}</span>
               </div>
               <span className="option-emoji" aria-hidden="true">{optionEmojis[index % optionEmojis.length]}</span>
             </div>

@@ -40,6 +40,52 @@ def test_registration_session_and_poll_authorization(client):
     assert client.get("/api/polls").status_code == 401
 
 
+def test_poll_place_subtitles_are_persisted(client):
+    register(client, "placeowner")
+    response = client.post(
+        "/api/polls",
+        json={
+            "title": "Куда вернёмся?",
+            "type": "rating",
+            "options": [
+                {"text": "Рамен-бар «Тёплый»", "subtitle": "Вокзальная · ₽₽"},
+                {"text": "Боулинг «Страйк»", "subtitle": "Север · ₽₽₽"},
+                {"text": "Кофейня «Сова»", "subtitle": "Центр · ₽₽"},
+            ],
+        },
+    )
+
+    assert response.status_code == 201
+    assert [option["subtitle"] for option in response.json()["options"]] == [
+        "Вокзальная · ₽₽",
+        "Север · ₽₽₽",
+        "Центр · ₽₽",
+    ]
+
+
+def test_google_sign_in_creates_a_session(client, monkeypatch):
+    from app.services import auth as auth_service
+
+    monkeypatch.setattr(auth_service, "GOOGLE_CLIENT_ID", "picksy-test-client")
+    monkeypatch.setattr(
+        auth_service.id_token,
+        "verify_oauth2_token",
+        lambda *_args, **_kwargs: {
+            "sub": "google-user-123",
+            "email": "googleuser@example.com",
+            "email_verified": True,
+            "name": "Google User",
+        },
+    )
+
+    response = client.post("/api/auth/google", json={"credential": "mock.google.credential"})
+
+    assert response.status_code == 200
+    user = response.json()["user"]
+    assert user["email"] == "googleuser@example.com"
+    assert client.get("/api/auth/me").json()["user"]["id"] == user["id"]
+
+
 def test_ratings_are_persisted_calculated_and_editable(client):
     register(client, "ratingowner")
     poll = client.post(

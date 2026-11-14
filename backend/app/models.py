@@ -96,6 +96,7 @@ class PollOption(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     poll_id: Mapped[str] = mapped_column(ForeignKey("polls.id", ondelete="CASCADE"), nullable=False, index=True)
     text: Mapped[str] = mapped_column(String(100), nullable=False)
+    subtitle: Mapped[str] = mapped_column(String(160), default="", nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
 
     poll: Mapped[Poll] = relationship(back_populates="options")

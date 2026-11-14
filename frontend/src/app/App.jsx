@@ -54,7 +54,7 @@ function IdeasPage({ polls, filter, setFilter, onCreate, onChoose, onVote, onCop
       ? <ActivePoll poll={activePoll} onVote={onVote} onCopyLink={onCopy} />
       : completedPoll
         ? <section className="active-vote empty-poll"><div className="vote-heading"><div><div className="section-kicker"><span className="live-dot" /> ВАШ АКТИВНЫЙ ВЫБОР</div><h2>Открытых голосований пока нет</h2><p className="vote-subtitle">Последнее решение уже завершено. Создайте новый план для компании.</p></div></div><button className="button-coral" onClick={() => onCreate()}>Создать голосование <span>→</span></button></section>
-        : <section className="active-vote empty-poll"><div className="vote-heading"><div><div className="section-kicker"><span className="live-dot" /> ВАШ АКТИВНЫЙ ВЫБОР</div><h2>Пока нет активного голосования</h2><p className="vote-subtitle">Создайте голосование, добавьте варианты и позовите друзей.</p></div></div><button className="button-coral" onClick={() => onCreate()}>Создать голосование <span>→</span></button></section>}
+        : <section className="active-vote empty-poll"><div className="vote-heading"><div><div className="section-kicker"><span className="live-dot" /> ВАШ АКТИВНЫЙ ВЫБОР</div><h2>Куда вернёмся в следующий раз?</h2><p className="vote-subtitle">Добавьте три места из недавних встреч и выберите, куда пойти компанией.</p></div></div><button className="button-coral" onClick={() => onCreate()}>Добавить места <span>→</span></button></section>}
     <IdeasSection filter={filter} onFilter={setFilter} onChoose={onChoose} />
     <CollectionBanner />
   </>;
