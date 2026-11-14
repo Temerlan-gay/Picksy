@@ -167,3 +167,91 @@ class VoteChoice(Base):
     option_id: Mapped[str] = mapped_column(ForeignKey("poll_options.id", ondelete="RESTRICT"), primary_key=True)
 
     vote: Mapped[Vote] = relationship(back_populates="choices")
+
+
+class DecisionRoom(Base):
+    __tablename__ = "decision_rooms"
+    __table_args__ = (CheckConstraint("method IN ('majority', 'unanimity', 'no_objections')", name="ck_room_method"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    question: Mapped[str] = mapped_column(String(200), nullable=False)
+    method: Mapped[str] = mapped_column(String(20), nullable=False)
+    hide_results: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    invite_token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    members: Mapped[list["DecisionRoomMember"]] = relationship(cascade="all, delete-orphan", lazy="selectin")
+    proposals: Mapped[list["DecisionProposal"]] = relationship(cascade="all, delete-orphan", order_by="DecisionProposal.created_at", lazy="selectin")
+    rounds: Mapped[list["DecisionRound"]] = relationship(cascade="all, delete-orphan", order_by="DecisionRound.number", lazy="selectin")
+
+
+class DecisionRoomMember(Base):
+    __tablename__ = "decision_room_members"
+    __table_args__ = (UniqueConstraint("room_id", "user_id", name="uq_room_members_user"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    room_id: Mapped[str] = mapped_column(ForeignKey("decision_rooms.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    user: Mapped[User] = relationship(lazy="joined")
+
+
+class DecisionProposal(Base):
+    __tablename__ = "decision_proposals"
+    __table_args__ = (CheckConstraint("status IN ('pending', 'accepted', 'rejected')", name="ck_proposal_status"), UniqueConstraint("room_id", "normalized_text", name="uq_room_proposal_text"))
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    room_id: Mapped[str] = mapped_column(ForeignKey("decision_rooms.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    text: Mapped[str] = mapped_column(String(160), nullable=False)
+    normalized_text: Mapped[str] = mapped_column(String(160), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), default="pending", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    author: Mapped[User] = relationship(lazy="joined")
+
+
+class DecisionRound(Base):
+    __tablename__ = "decision_rounds"
+    __table_args__ = (UniqueConstraint("room_id", "number", name="uq_room_round_number"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    room_id: Mapped[str] = mapped_column(ForeignKey("decision_rooms.id", ondelete="CASCADE"), nullable=False, index=True)
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(12), default="preparation", nullable=False)
+    method: Mapped[str] = mapped_column(String(20), nullable=False)
+    hide_results: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    participants: Mapped[list["DecisionRoundParticipant"]] = relationship(cascade="all, delete-orphan", lazy="selectin")
+    options: Mapped[list["DecisionRoundOption"]] = relationship(cascade="all, delete-orphan", order_by="DecisionRoundOption.position", lazy="selectin")
+    ballots: Mapped[list["DecisionBallot"]] = relationship(cascade="all, delete-orphan", lazy="selectin")
+
+
+class DecisionRoundParticipant(Base):
+    __tablename__ = "decision_round_participants"
+    __table_args__ = (UniqueConstraint("round_id", "user_id", name="uq_round_participants_user"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    round_id: Mapped[str] = mapped_column(ForeignKey("decision_rounds.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    is_owner: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+
+class DecisionRoundOption(Base):
+    __tablename__ = "decision_round_options"
+    __table_args__ = (UniqueConstraint("round_id", "proposal_id", name="uq_round_options_proposal"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    round_id: Mapped[str] = mapped_column(ForeignKey("decision_rounds.id", ondelete="CASCADE"), nullable=False, index=True)
+    proposal_id: Mapped[str] = mapped_column(ForeignKey("decision_proposals.id", ondelete="RESTRICT"), nullable=False)
+    text: Mapped[str] = mapped_column(String(160), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class DecisionBallot(Base):
+    __tablename__ = "decision_ballots"
+    __table_args__ = (UniqueConstraint("round_id", "user_id", name="uq_round_ballots_user"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    round_id: Mapped[str] = mapped_column(ForeignKey("decision_rounds.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    answer_json: Mapped[str] = mapped_column(Text, nullable=False)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)

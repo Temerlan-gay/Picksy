@@ -90,6 +90,14 @@ Participants can discuss the choices in the active poll card. Each non-owner can
 
 The three supported types are single choice, multiple choice, and 1–10 ratings. Each account can submit one ballot per poll; existing ballots can be updated until the poll closes. Public polls are visible to signed-in users. Private invite support exists in the API but is not exposed by the current UI.
 
+## Group decision rooms
+
+Open **Комнаты** to create a VETO decision room. The organizer sets a question and chooses majority, unanimity, or no objections. Share the invitation link so signed-in participants can join and suggest options. The organizer accepts or rejects suggestions, then starts a round once at least one other participant and one accepted option are present. The server snapshots the roster and choices before voting begins.
+
+Each person in the snapshot, including the organizer, can submit one complete ballot. Results are saved when the last participant votes. Hidden-result rounds reveal progress and voter status while ballots are still pending, then show the result distribution. Previous rounds stay in the room history, and the organizer can prepare another round with the same accepted options and room members.
+
+The room deadline is saved as a setting and shown in the room. The server does not automatically close a round when that deadline passes; rounds currently finish after all snapshotted participants submit a ballot.
+
 ## Configuration
 
 Environment variables are read by FastAPI:

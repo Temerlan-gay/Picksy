@@ -6,7 +6,9 @@ import { ideaKinds, optionsForIdea } from '../features/ideas/ideasData.js';
 import { IdeasSection } from '../features/ideas/components/IdeasSection.jsx';
 import { ActivePoll } from '../features/polls/components/ActivePoll.jsx';
 import { CreatePollModal } from '../features/polls/components/CreatePollModal.jsx';
+import { CreateDecisionRoomModal, DecisionRoomPage, DecisionRoomsPage } from '../features/polls/components/DecisionRoom.jsx';
 import { closePoll, createPoll, listPolls, submitChoices, submitRatings } from '../features/polls/api/pollsApi.js';
+import { createRoom, listRooms } from '../features/polls/api/roomsApi.js';
 
 function Header({ user, activeCount, onProfile }) {
   const location = useLocation();
@@ -14,6 +16,7 @@ function Header({ user, activeCount, onProfile }) {
     <header className="topbar">
       <Link className="brand" to="/" aria-label="Decido — главная"><span className="brand-mark">d</span><span>decido<span className="brand-dot">.</span></span></Link>
       <nav className="main-nav" aria-label="Главная навигация">
+        <Link className={`nav-link ${location.pathname.startsWith('/rooms') ? 'active' : ''}`} to="/rooms">Комнаты</Link>
         <Link className={`nav-link ${location.pathname === '/' ? 'active' : ''}`} to="/">Идеи</Link>
         <Link className={`nav-link ${location.pathname.startsWith('/polls') ? 'active' : ''}`} to="/polls">Голосование <span className="nav-count">{activeCount}</span></Link>
         <Link className={`nav-link ${location.pathname === '/collections' ? 'active' : ''}`} to="/collections">Подборки</Link>
@@ -108,6 +111,7 @@ function ProfileDialog({ user, onClose, onLogout }) {
 export default function App() {
   const [user, setUser] = useState(null);
   const [polls, setPolls] = useState([]);
+  const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [authError, setAuthError] = useState('');
@@ -123,6 +127,11 @@ export default function App() {
     setPolls(result.polls);
   }, []);
 
+  const refreshRooms = useCallback(async () => {
+    const result = await listRooms();
+    setRooms(result.rooms);
+  }, []);
+
   useEffect(() => {
     let active = true;
     getCurrentUser()
@@ -130,9 +139,10 @@ export default function App() {
         if (!active) return;
         setUser(authResult.user);
         if (!authResult.user) return;
-        const result = await listPolls();
+        const [result, roomResult] = await Promise.all([listPolls(), listRooms()]);
         if (!active) return;
         setPolls(result.polls);
+        setRooms(roomResult.rooms);
       })
       .catch(requestError => {
         if (active) setError(requestError.message);
@@ -157,6 +167,7 @@ export default function App() {
       const result = mode === 'register' ? await register(values) : await login(values);
       setUser(result.user);
       await refreshPolls();
+      await refreshRooms();
     } catch (requestError) {
       setAuthError(requestError.message);
     }
@@ -168,6 +179,7 @@ export default function App() {
       const result = await loginWithGoogle(credential);
       setUser(result.user);
       await refreshPolls();
+      await refreshRooms();
     } catch (requestError) {
       setAuthError(requestError.message);
     }
@@ -177,12 +189,24 @@ export default function App() {
     setModal({ options: idea ? optionsForIdea(idea.id) : [] });
   }
 
+  function showCreateRoom() {
+    setModal({ kind: 'room' });
+  }
+
   async function handleCreate(data) {
     await createPoll(data);
     await refreshPolls();
     setModal(null);
     navigate('/');
     setToast('Голосование создано. Позовите друзей выбрать план.');
+  }
+
+  async function handleCreateRoom(data) {
+    const result = await createRoom(data);
+    await refreshRooms();
+    setModal(null);
+    navigate(`/rooms/${result.room.id}?invite=${encodeURIComponent(result.room.invite_token)}`);
+    setToast('Комната создана. Пригласите участников по ссылке.');
   }
 
   async function handleVote(pollId, value) {
@@ -228,6 +252,7 @@ export default function App() {
     await logout();
     setUser(null);
     setPolls([]);
+    setRooms([]);
     setProfileOpen(false);
   }
 
@@ -245,11 +270,13 @@ export default function App() {
       <Route path="/" element={<IdeasPage polls={polls} user={user} filter={filter} setFilter={setFilter} onCreate={showCreate} onChoose={showCreate} onVote={handleVote} onCopy={handleCopyLink} onCollections={() => navigate('/collections')} />} />
       <Route path="/polls" element={<PollsPage polls={polls} onCreate={showCreate} />} />
       <Route path="/polls/:pollId" element={<PollDetailPage poll={currentPoll} onVote={handleVote} onCopy={handleCopyLink} onClose={handleClosePoll} user={user} />} />
+      <Route path="/rooms" element={<DecisionRoomsPage rooms={rooms} onCreate={showCreateRoom} />} />
+      <Route path="/rooms/:roomId" element={<DecisionRoomPage user={user} onRefreshRooms={refreshRooms} onToast={setToast} />} />
       <Route path="/collections" element={<CollectionsPage onCreate={showCreate} />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
     <Footer />
-    {modal && <CreatePollModal onClose={() => setModal(null)} onCreate={handleCreate} initialOptions={modal.options} />}
+    {modal?.kind === 'room' ? <CreateDecisionRoomModal onClose={() => setModal(null)} onCreate={handleCreateRoom} /> : modal && <CreatePollModal onClose={() => setModal(null)} onCreate={handleCreate} initialOptions={modal.options} />}
     {profileOpen && <ProfileDialog user={user} onClose={() => setProfileOpen(false)} onLogout={handleLogout} />}
     <div className={`toast ${toast ? 'visible' : ''}`} role="status" aria-live="polite">{toast}</div>
   </div>;

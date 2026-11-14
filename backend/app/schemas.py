@@ -165,3 +165,52 @@ class PollResponse(BaseModel):
 
 class PollListResponse(BaseModel):
     polls: list[PollResponse]
+
+
+class DecisionRoomCreate(BaseModel):
+    question: str = Field(min_length=1, max_length=200)
+    method: Literal["majority", "unanimity", "no_objections"]
+    hide_results: bool = False
+    deadline: datetime | None = None
+
+    @model_validator(mode="after")
+    def clean_question(self) -> "DecisionRoomCreate":
+        self.question = self.question.strip()
+        if not self.question:
+            raise ValueError("Добавьте вопрос для комнаты.")
+        if self.deadline and self.deadline.timestamp() <= datetime.now().timestamp():
+            raise ValueError("Срок голосования должен быть в будущем.")
+        return self
+
+
+class DecisionJoinRequest(BaseModel):
+    invite_token: str = Field(min_length=20, max_length=200)
+
+
+class ProposalCreate(BaseModel):
+    text: str = Field(min_length=1, max_length=160)
+
+    @model_validator(mode="after")
+    def clean_text(self) -> "ProposalCreate":
+        self.text = self.text.strip()
+        if not self.text:
+            raise ValueError("Название варианта не может быть пустым.")
+        return self
+
+
+class ProposalDecision(BaseModel):
+    decision: Literal["accepted", "rejected"]
+
+
+class BallotEvaluation(BaseModel):
+    option_id: str
+    objection: bool
+
+
+class DecisionBallotRequest(BaseModel):
+    option_id: str | None = None
+    evaluations: list[BallotEvaluation] | None = Field(default=None, max_length=100)
+
+
+class DecisionVoteRequest(BaseModel):
+    ballot: DecisionBallotRequest

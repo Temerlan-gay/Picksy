@@ -14,7 +14,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.api.routes import auth, discussion, polls
+from app.api.routes import auth, discussion, polls, rooms
 from app.core.config import CORS_ORIGINS, PROJECT_ROOT
 from app.core.database import create_database_schema, engine
 
@@ -39,12 +39,13 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
     allow_headers=["Content-Type", "X-Poll-Invite"],
 )
 app.include_router(auth.router)
 app.include_router(polls.router)
 app.include_router(discussion.router)
+app.include_router(rooms.router)
 
 
 @app.middleware("http")
