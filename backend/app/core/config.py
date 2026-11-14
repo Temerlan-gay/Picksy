@@ -9,6 +9,10 @@ DATABASE_URL = os.getenv(
     "DATABASE_URL",
     f"sqlite:///{(PROJECT_ROOT / 'data' / 'decido.sqlite').as_posix()}",
 )
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
+elif DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 SESSION_TTL_DAYS = int(os.getenv("SESSION_TTL_DAYS", "14"))
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
 CORS_ORIGINS = [

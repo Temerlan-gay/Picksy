@@ -105,6 +105,17 @@ npm run build
 
 `npm test` runs the legacy Node regression tests and FastAPI integration tests. The frontend build is written to `frontend/dist`.
 
-## VM deployment direction
+## Run the production container locally
 
-Build the frontend with `npm run build`, serve `frontend/dist` from Nginx, and proxy `/api/` to the Uvicorn service. Set `COOKIE_SECURE=true` behind HTTPS and use a persistent SQL database volume. Keep runtime secrets on the server; do not put them in Vite variables.
+Docker Compose runs the React build, FastAPI, and PostgreSQL on one origin. Create a Docker environment file and replace its sample password with a long URL-safe value:
+
+```sh
+cp .env.docker.example .env.docker
+docker compose --env-file .env.docker up --build
+```
+
+Open <http://localhost:8000>. The PostgreSQL data is stored in the `postgres_data` Docker volume. Stop the containers with `docker compose --env-file .env.docker down`; keep the volume to retain poll data.
+
+## VM deployment
+
+Build and run the container on the VM, keep its published port bound to `127.0.0.1`, and configure Nginx with `deploy/nginx.conf`. Enable HTTPS in Nginx and set `COOKIE_SECURE=true`. Keep `.env.docker` and database credentials on the server; do not commit them. Back up the PostgreSQL volume. The container serves the built React app and its `/api` endpoints from the same origin.
