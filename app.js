@@ -32,6 +32,7 @@ let nearbyPlaces = [];
 let placeSearchError = '';
 let placeSearchLoading = false;
 let placeSearchVersion = 0;
+let webFontsLoaded = false;
 
 function readInviteTokens() {
   try {
@@ -62,6 +63,15 @@ function toast(message) {
   element.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => element.classList.remove('show'), 3000);
+}
+
+function loadWebFonts() {
+  if (webFontsLoaded) return;
+  webFontsLoaded = true;
+  const stylesheet = document.createElement('link');
+  stylesheet.rel = 'stylesheet';
+  stylesheet.href = 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap';
+  document.head.append(stylesheet);
 }
 
 function clearPlaceSession() {
@@ -119,7 +129,7 @@ function showAuth(mode = 'login', message = '') {
           <label class="form-label" for="auth-name">Ваше имя</label>
           <input class="text-input" id="auth-name" name="displayName" autocomplete="name" maxlength="50" required placeholder="Как к вам обращаться?" />
           <label class="form-label" for="auth-username">Имя пользователя</label>
-          <input class="text-input" id="auth-username" name="username" autocomplete="username" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]{3,24}" required placeholder="например, alex_1" />
+          <input class="text-input" id="auth-username" name="username" autocomplete="username" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]{3,24}" required placeholder="Ваше имя" />
           <small class="auth-hint">3–24 символа: латиница, цифры и _</small>
           <label class="form-label" for="auth-email">Email</label>
           <input class="text-input" id="auth-email" name="email" type="email" autocomplete="email" maxlength="254" required placeholder="you@example.com" />
@@ -135,6 +145,7 @@ function showAuth(mode = 'login', message = '') {
       <p class="auth-switch">${mode === 'register' ? 'Уже есть аккаунт?' : 'Впервые в Picksy?'} <button type="button" class="auth-switch-button" data-auth-mode="${mode === 'register' ? 'login' : 'register'}">${mode === 'register' ? 'Войти' : 'Создать аккаунт'}</button></p>
       <div class="auth-security">Пароль хранится в защищённом виде и никогда не показывается другим участникам.</div>
     </section>`;
+  loadWebFonts();
 
   $('#auth-form').addEventListener('submit', async event => {
     event.preventDefault();
@@ -805,15 +816,18 @@ async function bootstrap() {
     }[googleError];
     const loginSucceeded = parameters.get('google_login') === 'success';
     if (googleError || loginSucceeded) history.replaceState(null, '', `${location.pathname}#home`);
-    const providers = await api('/api/auth/providers');
+    const [providers, result] = await Promise.all([
+      api('/api/auth/providers'),
+      api('/api/auth/me')
+    ]);
     googleEnabled = providers.googleEnabled;
     placesEnabled = providers.placesEnabled;
-    const result = await api('/api/auth/me');
     if (!result.user) return showAuth('login', googleMessage || '');
     currentUser = result.user;
     authRoot.hidden = true;
     appShell.hidden = false;
     await route();
+    loadWebFonts();
     if (googleMessage) toast(googleMessage);
     if (loginSucceeded) toast('Вы вошли в Picksy через Google.');
   } catch (error) {
@@ -824,4 +838,5 @@ async function bootstrap() {
   }
 }
 
+renderLoading();
 bootstrap();
