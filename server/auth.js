@@ -8,7 +8,8 @@ const publicUser = user => ({
   id: user.id,
   username: user.username,
   displayName: user.display_name,
-  email: user.email
+  email: user.email,
+  googleLinked: Boolean(user.google_sub)
 });
 
 export const hashToken = token => createHash('sha256').update(token).digest('hex');
@@ -41,7 +42,7 @@ async function passwordMatches(password, storedHash) {
   return timingSafeEqual(expected, actual);
 }
 
-function createSession(db, userId, request, response) {
+export function createSession(db, userId, request, response) {
   const token = randomBytes(32).toString('base64url');
   const createdAt = new Date();
   const expiresAt = new Date(createdAt.getTime() + sessionLifetimeMs);
@@ -56,7 +57,7 @@ export function currentUser(db, request) {
   if (!token || token.length > 200) return null;
 
   const session = db.prepare(`
-    SELECT users.id, users.username, users.display_name, users.email, sessions.expires_at
+    SELECT users.id, users.username, users.display_name, users.email, users.google_sub, sessions.expires_at
     FROM sessions JOIN users ON users.id = sessions.user_id
     WHERE sessions.token_hash = ?
   `).get(hashToken(token));
@@ -68,11 +69,17 @@ export function currentUser(db, request) {
   return publicUser(session);
 }
 
-export async function handleAuth(db, request, response, url, body) {
+export async function handleAuth(db, request, response, url, body, googleEnabled = Boolean(
+  process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REDIRECT_URI
+), placesEnabled = Boolean(process.env.GOOGLE_PLACES_API_KEY)) {
   const secure = request.socket.encrypted || process.env.NODE_ENV === 'production';
 
   if (request.method === 'GET' && url.pathname === '/api/auth/me') {
     return { user: currentUser(db, request) };
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/auth/providers') {
+    return { googleEnabled, placesEnabled };
   }
 
   if (request.method === 'POST' && url.pathname === '/api/auth/register') {

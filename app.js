@@ -3,6 +3,19 @@ const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const appShell = $('.app-shell');
 const authRoot = $('#auth-root');
 const inviteStorageKey = 'picksy-invite-tokens';
+const placeTypeLabels = {
+  amusement_park: 'Парк развлечений',
+  bakery: 'Пекарня',
+  bar: 'Бар',
+  bowling_alley: 'Боулинг',
+  cafe: 'Кафе',
+  museum: 'Музей',
+  movie_theater: 'Кинотеатр',
+  park: 'Парк',
+  restaurant: 'Ресторан',
+  tourist_attraction: 'Достопримечательность',
+  zoo: 'Зоопарк'
+};
 
 let currentUser = null;
 let polls = [];
@@ -10,6 +23,15 @@ let toastTimer;
 let routeVersion = 0;
 let pollFilter = 'all';
 let inviteTokens = readInviteTokens();
+let googleEnabled = false;
+let placesEnabled = false;
+let placeCategory = 'sit';
+let placeRadius = 5000;
+let userLocation = null;
+let nearbyPlaces = [];
+let placeSearchError = '';
+let placeSearchLoading = false;
+let placeSearchVersion = 0;
 
 function readInviteTokens() {
   try {
@@ -42,6 +64,14 @@ function toast(message) {
   toastTimer = setTimeout(() => element.classList.remove('show'), 3000);
 }
 
+function clearPlaceSession() {
+  placeSearchVersion += 1;
+  userLocation = null;
+  nearbyPlaces = [];
+  placeSearchError = '';
+  placeSearchLoading = false;
+}
+
 async function api(path, options = {}) {
   const headers = new Headers(options.headers || {});
   if (options.body !== undefined) headers.set('Content-Type', 'application/json');
@@ -58,6 +88,7 @@ async function api(path, options = {}) {
     error.code = payload.error?.code;
     if (response.status === 401 && currentUser) {
       currentUser = null;
+      clearPlaceSession();
       showAuth('login', 'Сессия завершилась. Войдите снова.');
     }
     throw error;
@@ -79,6 +110,10 @@ function showAuth(mode = 'login', message = '') {
       <h1>${mode === 'register' ? 'Создайте аккаунт' : 'С возвращением'}</h1>
       <p class="auth-intro">${mode === 'register' ? 'Собирайте людей и помогайте принимать решения вместе.' : 'Войдите, чтобы продолжить голосование и увидеть свои решения.'}</p>
       ${message ? `<div class="auth-notice" role="status">${escapeHTML(message)}</div>` : ''}
+      ${googleEnabled
+        ? `<a class="google-signin" href="/api/auth/google/start"><svg aria-hidden="true" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5Z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94a11.05 11.05 0 0 1-4.8 7.24l7.73 5.99c4.51-4.16 7.11-10.29 7.11-17.7Z"/><path fill="#FBBC05" d="M10.53 28.59a14.36 14.36 0 0 1 0-9.18l-7.98-6.19a23.94 23.94 0 0 0 0 21.56l7.98-6.19Z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.75l-7.73-5.99c-2.14 1.44-4.89 2.3-8.17 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48Z"/></svg>Продолжить с Google</a>`
+        : `<button class="google-signin google-signin-disabled" type="button" disabled><span class="google-letter">G</span>Продолжить с Google</button><div class="google-setup-hint">Для входа через Google администратору нужно настроить OAuth Client в Google Cloud.</div>`}
+      <div class="auth-divider"><span>или через email</span></div>
       <form id="auth-form">
         ${mode === 'register' ? `
           <label class="form-label" for="auth-name">Ваше имя</label>
@@ -157,7 +192,8 @@ function renderHome(query = '') {
   $('#view-root').innerHTML = `<section class="welcome-row"><div><div class="eyebrow"><span class="eyebrow-dot"></span> ВАШЕ ПРОСТРАНСТВО</div><h1>Привет, ${escapeHTML(currentUser.displayName)} <span class="wave">✳</span></h1><p class="welcome-copy">Что решим вместе? Создайте голосование и соберите мнения в одном месте.</p></div><button class="button button-primary create-large" data-action="create">＋ Создать голосование <span>↗</span></button></section>
     <section class="quick-stats"><article class="stat-card"><span class="stat-icon coral">◉</span><div><small>Активные голосования</small><strong>${open.length}</strong></div><span class="stat-foot">сейчас</span></article><article class="stat-card"><span class="stat-icon mint">✓</span><div><small>Создано вами</small><strong>${polls.filter(poll => poll.owner_id === currentUser.id).length}</strong></div><span class="stat-foot">всего</span></article><article class="stat-card"><span class="stat-icon lilac">↗</span><div><small>Всего голосов</small><strong>${polls.reduce((sum, poll) => sum + poll.voteCount, 0)}</strong></div><span class="stat-foot">в голосованиях</span></article></section>
     <section class="content-section"><div class="section-heading"><div><div class="section-label">СОБИРАЕМ МНЕНИЯ</div><h2>${query ? 'Результаты поиска' : 'Активные голосования'}</h2></div><a href="#polls" class="quiet-link">Все голосования <span>→</span></a></div>${open.length ? `<div class="poll-grid">${open.map(pollCard).join('')}</div>` : `<div class="empty-card"><div class="empty-illustration">◉</div><h3>${query ? 'Ничего не нашлось' : 'Пока нет активных голосований'}</h3><p>${query ? 'Попробуйте изменить поисковый запрос.' : 'Создайте первое голосование и пригласите людей решить вопрос вместе.'}</p>${!query ? '<button class="button button-outline" data-action="create">Создать голосование <span>→</span></button>' : ''}</div>`}</section>
-    <section class="content-section recent-section"><div class="section-heading"><div><div class="section-label">ИСТОРИЯ</div><h2>Недавние голосования</h2></div></div>${recent.length ? `<div class="recent-list">${recent.map(poll => `<a class="recent-row" href="#poll/${encodeURIComponent(poll.id)}"><span class="recent-icon">${poll.closed ? '✓' : '◉'}</span><span class="recent-main"><strong>${escapeHTML(poll.title)}</strong><small>${poll.options.length} вариантов · ${poll.voteCount} голосов</small></span><span class="status-pill ${poll.closed ? 'closed' : ''}">${poll.closed ? 'Завершено' : 'Активно'}</span><span class="row-arrow">↗</span></a>`).join('')}</div>` : '<div class="recent-empty">Ваши голосования появятся здесь.</div>'}</section>`;
+    <section class="content-section recent-section"><div class="section-heading"><div><div class="section-label">ИСТОРИЯ</div><h2>Недавние голосования</h2></div></div>${recent.length ? `<div class="recent-list">${recent.map(poll => `<a class="recent-row" href="#poll/${encodeURIComponent(poll.id)}"><span class="recent-icon">${poll.closed ? '✓' : '◉'}</span><span class="recent-main"><strong>${escapeHTML(poll.title)}</strong><small>${poll.options.length} вариантов · ${poll.voteCount} голосов</small></span><span class="status-pill ${poll.closed ? 'closed' : ''}">${poll.closed ? 'Завершено' : 'Активно'}</span><span class="row-arrow">↗</span></a>`).join('')}</div>` : '<div class="recent-empty">Ваши голосования появятся здесь.</div>'}</section>
+    <section class="collection-promo"><div><div class="section-label">СОБРАНО ДЛЯ ВАС</div><h2>Хорошее место — ближе, чем кажется</h2><p>Найдём кафе, развлечения и прогулки рядом с вами — с настоящими оценками посетителей.</p><a class="button button-outline" href="#collections">Найти места рядом <span>→</span></a></div><div class="collection-promo-art" aria-hidden="true"><span>☕</span><span>🎳</span><span>✳</span></div></section>`;
 }
 
 function renderList() {
@@ -256,6 +292,151 @@ function renderSectionComingSoon(section) {
   $('#view-root').innerHTML = `<section class="coming-page"><div class="coming-icon">${section === 'groups' ? '♧' : section === 'messages' ? '▱' : '▤'}</div><div class="eyebrow">СЛЕДУЮЩИЙ ЭТАП</div><h1>${content[0]}</h1><p>${content[1]}</p><a class="button button-outline" href="#polls">Перейти к голосованиям <span>→</span></a></section>`;
 }
 
+function escapePlaceRatingCount(count) {
+  return new Intl.NumberFormat('ru-RU').format(count);
+}
+
+function placeCountLabel(count) {
+  const tens = count % 100;
+  const units = count % 10;
+  if (tens >= 11 && tens <= 14) return 'мест';
+  if (units === 1) return 'место';
+  if (units >= 2 && units <= 4) return 'места';
+  return 'мест';
+}
+
+function placeIcon(category) {
+  if (['cafe', 'bakery', 'restaurant', 'bar'].includes(category)) return '☕';
+  if (category === 'bowling_alley') return '🎳';
+  if (category === 'movie_theater') return '🎬';
+  if (category === 'amusement_park') return '🎡';
+  if (category === 'museum') return '🎨';
+  if (category === 'zoo') return '🦒';
+  return '🌿';
+}
+
+function renderPlaceCard(place, index) {
+  const price = place.priceLevel === null ? '' : place.priceLevel === 0 ? 'Бесплатно' : '₽'.repeat(place.priceLevel);
+  const distance = place.distanceMeters < 1000
+    ? `${place.distanceMeters} м`
+    : `${(place.distanceMeters / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} км`;
+  return `<article class="place-card">
+    <div class="place-cover place-cover-${index % 4}"><span class="place-category-icon" aria-hidden="true">${placeIcon(place.category)}</span><span class="place-rating-badge">★ ${place.rating.toFixed(1)}</span></div>
+    <div class="place-card-content"><div class="place-kicker">${placeTypeLabels[place.category] || 'Место'}${price ? ` · ${price}` : ''}</div>
+    <h3>${escapeHTML(place.name)}</h3><div class="place-rating-meta"><span class="place-stars" aria-label="Оценка ${place.rating.toFixed(1)} из 5">★★★★★</span><span>${place.rating.toFixed(1)} · ${escapePlaceRatingCount(place.ratingCount)} оценок</span></div>
+    <p class="place-address">${escapeHTML(place.address)}</p><div class="place-card-bottom"><span>↗ ${distance} от вас</span><a href="${escapeHTML(place.mapsUrl)}" target="_blank" rel="noopener noreferrer">Открыть карту <span>↗</span></a></div></div>
+  </article>`;
+}
+
+function renderCollectionResults() {
+  const results = $('#place-results');
+  if (!results) return;
+  if (placeSearchLoading) {
+    results.innerHTML = '<div class="place-skeleton-grid"><div class="place-skeleton"></div><div class="place-skeleton"></div><div class="place-skeleton"></div></div>';
+    return;
+  }
+  if (placeSearchError) {
+    results.innerHTML = `<div class="place-state place-state-error"><span class="place-state-icon">!</span><h3>Не удалось найти места</h3><p>${escapeHTML(placeSearchError)}</p><button class="button button-outline" data-action="search-places">Попробовать ещё раз <span>↻</span></button></div>`;
+    return;
+  }
+  if (!placesEnabled) {
+    results.innerHTML = '<div class="place-state"><span class="place-state-icon">✳</span><h3>Поиск мест пока не настроен</h3><p>Чтобы показывать реальные места с оценками Google, администратору нужно включить Google Places API и добавить ключ сервера.</p></div>';
+    return;
+  }
+  if (!userLocation) {
+    results.innerHTML = `<div class="location-consent"><div class="location-art" aria-hidden="true"><span class="location-pin">⌖</span><span class="location-orbit"></span></div><div class="location-consent-copy"><div class="section-label">ВАШ ВЫБОР — ВАША КОНФИДЕНЦИАЛЬНОСТЬ</div><h3>Сначала узнаем, что рядом</h3><p>Picksy запросит разовый доступ к вашему местоположению. После разрешения координаты будут переданы Google Places только для поиска поблизости — Picksy не сохраняет их в базе или профиле.</p><button class="button button-primary" data-action="search-places">Разрешить геолокацию и найти места <span>→</span></button><span class="location-secure-note">Разовое определение · без фонового отслеживания</span></div></div>`;
+    return;
+  }
+  if (!nearbyPlaces.length) {
+    results.innerHTML = `<div class="place-state"><span class="place-state-icon">⌖</span><h3>Пока не нашли подходящих мест</h3><p>Поблизости не оказалось мест с оценкой 4,0+ и минимум 10 отзывами в радиусе ${placeRadius / 1000} км. Попробуйте увеличить радиус.</p><button class="button button-outline" data-action="search-places">Искать ещё раз <span>↻</span></button></div>`;
+    return;
+  }
+  results.innerHTML = `<div class="places-results-heading"><div><strong>${nearbyPlaces.length} ${placeCountLabel(nearbyPlaces.length)} рядом</strong><span>Оценка от 4,0 · не менее 10 отзывов</span></div><span class="places-provider">Оценки Google Maps</span></div><div class="places-grid">${nearbyPlaces.map(renderPlaceCard).join('')}</div><p class="places-attribution">Места, оценки и число отзывов предоставлены Google Maps. Информация может измениться.</p>`;
+}
+
+function renderCollections() {
+  pageTitle('Подборки');
+  $('#view-root').innerHTML = `<section class="collections-page">
+    <header class="collections-header"><div><div class="eyebrow"><span class="eyebrow-dot"></span> ИДЕИ РЯДОМ С ВАМИ</div><h1>Собрано для вас<span class="collections-spark"> ✳</span></h1><p class="welcome-copy">Места, куда можно заглянуть, поиграть и приятно провести время.</p></div>
+    <div class="location-status ${userLocation ? 'location-status-ready' : ''}"><span class="location-status-dot"></span><span>${userLocation ? 'Локация определена · только в этой сессии' : 'Ваш адрес не сохраняем'}</span></div></header>
+    <section class="collection-hero"><div class="collection-hero-copy"><div class="section-label">ХОРОШИЙ ВЕЧЕР НАЧИНАЕТСЯ С ИДЕИ</div><h2>${placeCategory === 'sit' ? 'Поговорить за чашкой кофе?' : placeCategory === 'play' ? 'Пора выбраться и повеселиться?' : 'Немного воздуха и красивый маршрут?'}</h2><p>${placeCategory === 'sit' ? 'Подберём уютные кафе и места, где комфортно провести время.' : placeCategory === 'play' ? 'Найдём боулинг, кино, музеи и другие места для развлечений.' : 'Покажем парки, достопримечательности и места для прогулок.'}</p>
+    ${userLocation ? '<button class="collection-hero-action" data-action="search-places">Обновить места <span>↻</span></button>' : '<button class="collection-hero-action" data-action="focus-location">Найти места рядом <span>→</span></button>'}</div><div class="collection-hero-art" aria-hidden="true"><span class="hero-orbit hero-orbit-one"></span><span class="hero-orbit hero-orbit-two"></span><span class="hero-object hero-object-coffee">☕</span><span class="hero-object hero-object-play">🎳</span><span class="hero-object hero-object-star">✳</span></div></section>
+    <section class="places-section"><div class="places-section-heading"><div><div class="section-label">КУДА ПОЙДЁМ?</div><h2>Выберите настроение</h2></div><label class="radius-picker"><span>Радиус</span><select id="place-radius" aria-label="Радиус поиска"><option value="3000" ${placeRadius === 3000 ? 'selected' : ''}>3 км</option><option value="5000" ${placeRadius === 5000 ? 'selected' : ''}>5 км</option><option value="10000" ${placeRadius === 10000 ? 'selected' : ''}>10 км</option><option value="20000" ${placeRadius === 20000 ? 'selected' : ''}>20 км</option></select></label></div>
+    <div class="place-category-tabs" role="tablist" aria-label="Тип мест"><button type="button" role="tab" class="${placeCategory === 'sit' ? 'active' : ''}" aria-selected="${placeCategory === 'sit'}" data-place-category="sit"><span>☕</span> Посидеть</button><button type="button" role="tab" class="${placeCategory === 'play' ? 'active' : ''}" aria-selected="${placeCategory === 'play'}" data-place-category="play"><span>🎳</span> Поиграться</button><button type="button" role="tab" class="${placeCategory === 'walk' ? 'active' : ''}" aria-selected="${placeCategory === 'walk'}" data-place-category="walk"><span>🌿</span> Прогуляться</button></div>
+    <div class="place-quality-note"><span>★</span><span>Показываем реальные места с рейтингом <strong>4,0+</strong> и минимум <strong>10 отзывами</strong> — без придуманных рекомендаций.</span></div>
+    <div id="place-results" aria-live="polite"></div></section>
+    <section class="privacy-footnote"><span>⌖</span><p><strong>Без слежки.</strong> Местоположение определяется только по вашему запросу. Picksy не сохраняет координаты и не следит за вами в фоне.</p></section>
+  </section>`;
+  renderCollectionResults();
+}
+
+async function findNearbyPlaces() {
+  if (!placesEnabled) {
+    placeSearchError = 'Сервис подбора мест пока не настроен. Попробуйте позже.';
+    renderCollectionResults();
+    return;
+  }
+  const searchPage = location.hash;
+  const searchUserId = currentUser?.id;
+  if (!userLocation) {
+    if (!navigator.geolocation) {
+      placeSearchError = 'Этот браузер не поддерживает определение местоположения.';
+      renderCollectionResults();
+      return;
+    }
+    placeSearchLoading = true;
+    placeSearchError = '';
+    renderCollectionResults();
+    try {
+      userLocation = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          position => resolve({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
+          error => reject(error),
+          { enableHighAccuracy: false, timeout: 12_000, maximumAge: 60_000 }
+        );
+      });
+    } catch (error) {
+      placeSearchLoading = false;
+      placeSearchError = error.code === 1
+        ? 'Доступ к местоположению запрещён. Разрешите геолокацию для этого сайта в настройках браузера и попробуйте снова.'
+        : error.code === 2
+          ? 'Не удалось определить местоположение. Проверьте настройки геолокации устройства.'
+          : error.code === 3
+            ? 'Определение местоположения заняло слишком много времени. Попробуйте ещё раз.'
+            : 'Не удалось получить местоположение. Проверьте настройки браузера и попробуйте ещё раз.';
+      renderCollectionResults();
+      return;
+    }
+  }
+
+  if (location.hash !== searchPage || currentUser?.id !== searchUserId) {
+    placeSearchLoading = false;
+    return;
+  }
+  const searchVersion = ++placeSearchVersion;
+  placeSearchLoading = true;
+  placeSearchError = '';
+  renderCollectionResults();
+  try {
+    const result = await api('/api/places/nearby', {
+      method: 'POST',
+      body: { ...userLocation, category: placeCategory, radiusMeters: placeRadius }
+    });
+    if (searchVersion !== placeSearchVersion) return;
+    placeSearchLoading = false;
+    if (location.hash !== '#collections') return;
+    nearbyPlaces = result.places;
+    renderCollectionResults();
+  } catch (error) {
+    if (searchVersion !== placeSearchVersion) return;
+    placeSearchLoading = false;
+    placeSearchError = error instanceof TypeError
+      ? 'Не удалось связаться с сервисом поиска мест. Проверьте интернет-соединение и попробуйте ещё раз.'
+      : error.message;
+    renderCollectionResults();
+  }
+}
+
 async function route() {
   if (!currentUser) return;
   const version = ++routeVersion;
@@ -280,6 +461,8 @@ async function route() {
       if (!polls.some(poll => poll.id === detail.poll.id)) polls.unshift(detail.poll);
     } else if (path === 'polls') {
       renderList();
+    } else if (path === 'collections') {
+      renderCollections();
     } else if (['questions', 'messages', 'groups'].includes(path)) {
       renderSectionComingSoon(path);
     } else {
@@ -460,6 +643,14 @@ document.addEventListener('click', async event => {
     renderList();
     return;
   }
+  const category = event.target.closest('[data-place-category]')?.dataset.placeCategory;
+  if (category) {
+    placeCategory = category;
+    placeSearchError = '';
+    renderCollections();
+    if (userLocation) findNearbyPlaces();
+    return;
+  }
   const rateButton = event.target.closest('.rate-button');
   if (rateButton && !rateButton.disabled) {
     const row = rateButton.closest('.ballot-option');
@@ -471,6 +662,11 @@ document.addEventListener('click', async event => {
   if (!action) return;
   if (action === 'create') return openCreate();
   if (action === 'retry') return route();
+  if (action === 'focus-location') {
+    $('#place-results')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  if (action === 'search-places') return findNearbyPlaces();
   if (action === 'submit-vote') return submitVote();
   if (action === 'copy-link') return copyLink();
   if (action === 'reply-comment') {
@@ -513,6 +709,12 @@ document.addEventListener('click', async event => {
       toast(error.message);
     }
   }
+});
+
+document.addEventListener('change', event => {
+  if (event.target.id !== 'place-radius') return;
+  placeRadius = Number(event.target.value);
+  if (userLocation) findNearbyPlaces();
 });
 
 document.addEventListener('submit', async event => {
@@ -558,7 +760,12 @@ $('#search-input').addEventListener('input', () => {
   if (!location.hash || location.hash === '#home') renderHome($('#search-input').value.trim());
 });
 $('#profile-button').addEventListener('click', () => {
-  $('#modal-content').innerHTML = `<div class="modal-eyebrow">ВАШ АККАУНТ</div><h2 id="modal-title">${escapeHTML(currentUser.displayName)}</h2><p class="modal-intro">@${escapeHTML(currentUser.username)} · ${escapeHTML(currentUser.email)}</p><button class="button button-outline full-button" id="logout-button">Выйти из аккаунта <span>↗</span></button>`;
+  const googleConnection = currentUser.googleLinked
+    ? '<div class="google-linked"><span>✓</span> Аккаунт Google подключён</div>'
+    : googleEnabled
+      ? '<a class="google-profile-link" href="/api/auth/google/start?intent=link">Подключить Google <span>↗</span></a>'
+      : '<div class="google-setup-hint profile-google-hint">Google OAuth пока не настроен.</div>';
+  $('#modal-content').innerHTML = `<div class="modal-eyebrow">ВАШ АККАУНТ</div><h2 id="modal-title">${escapeHTML(currentUser.displayName)}</h2><p class="modal-intro">@${escapeHTML(currentUser.username)} · ${escapeHTML(currentUser.email)}</p>${googleConnection}<button class="button button-outline full-button" id="logout-button">Выйти из аккаунта <span>↗</span></button>`;
   openModal();
   $('#logout-button').addEventListener('click', async event => {
     const button = event.currentTarget;
@@ -566,6 +773,7 @@ $('#profile-button').addEventListener('click', () => {
     try {
       await api('/api/auth/logout', { method: 'POST', body: {} });
       currentUser = null;
+      clearPlaceSession();
       closeModal();
       showAuth('login', 'Вы вышли из аккаунта.');
     } catch (error) {
@@ -585,12 +793,29 @@ window.addEventListener('hashchange', route);
 
 async function bootstrap() {
   try {
+    const parameters = new URLSearchParams(location.search);
+    const googleError = parameters.get('google_error');
+    const googleMessage = {
+      not_configured: 'Вход через Google пока не настроен. Добавьте OAuth Client в Google Cloud.',
+      invalid_state: 'Проверка безопасности Google не прошла. Попробуйте войти ещё раз.',
+      cancelled: 'Вход через Google отменён.',
+      account_conflict: 'Аккаунт с таким email уже существует. Войдите по паролю и подключите Google в профиле.',
+      login_required: 'Сначала войдите в Picksy, чтобы привязать Google к существующему аккаунту.',
+      sign_in_failed: 'Не удалось войти через Google. Попробуйте ещё раз.'
+    }[googleError];
+    const loginSucceeded = parameters.get('google_login') === 'success';
+    if (googleError || loginSucceeded) history.replaceState(null, '', `${location.pathname}#home`);
+    const providers = await api('/api/auth/providers');
+    googleEnabled = providers.googleEnabled;
+    placesEnabled = providers.placesEnabled;
     const result = await api('/api/auth/me');
-    if (!result.user) return showAuth('login');
+    if (!result.user) return showAuth('login', googleMessage || '');
     currentUser = result.user;
     authRoot.hidden = true;
     appShell.hidden = false;
     await route();
+    if (googleMessage) toast(googleMessage);
+    if (loginSucceeded) toast('Вы вошли в Picksy через Google.');
   } catch (error) {
     appShell.hidden = true;
     authRoot.hidden = false;

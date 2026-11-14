@@ -5,7 +5,8 @@ import { DatabaseSync } from 'node:sqlite';
 
 const migrations = [
   new URL('./migrations/001-initial.sql', import.meta.url),
-  new URL('./migrations/002-poll-comments.sql', import.meta.url)
+  new URL('./migrations/002-poll-comments.sql', import.meta.url),
+  new URL('./migrations/003-google-identity.sql', import.meta.url)
 ];
 
 export function openDatabase(filename = process.env.PICKSY_DB_PATH || 'data/picksy.sqlite') {

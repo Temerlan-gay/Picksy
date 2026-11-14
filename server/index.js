@@ -1,11 +1,16 @@
 import { createServer } from 'node:http';
+import { existsSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDatabase } from './database.js';
 import { handleAuth } from './auth.js';
+import { googleConfigFromEnv, handleGoogleAuth } from './google-auth.js';
 import { handlePolls } from './polls.js';
+import { handlePlaces } from './places.js';
 import { AppError } from './errors.js';
+
+if (existsSync(resolve(process.cwd(), '.env'))) process.loadEnvFile();
 
 const root = resolve(fileURLToPath(new URL('../', import.meta.url)));
 const port = Number(process.env.PORT || 3000);
@@ -94,13 +99,18 @@ async function serveStatic(pathname, response) {
   response.writeHead(200, {
     'Content-Type': mimeTypes[extname(file)] || 'application/octet-stream',
     'Content-Length': content.length,
-    'Cache-Control': requestPath === '/index.html' ? 'no-cache' : 'public, max-age=300'
+    'Cache-Control': 'no-cache'
   });
   response.end(content);
   return true;
 }
 
-export function createApp({ databasePath } = {}) {
+export function createApp({
+  databasePath,
+  googleConfig = googleConfigFromEnv(),
+  placesApiKey = process.env.GOOGLE_PLACES_API_KEY,
+  fetchImpl = fetch
+} = {}) {
   const db = openDatabase(databasePath);
   db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(new Date().toISOString());
 
@@ -112,11 +122,34 @@ export function createApp({ databasePath } = {}) {
       url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
       if (isApi) {
         if (!['GET', 'POST'].includes(request.method || '')) throw new AppError(405, 'METHOD_NOT_ALLOWED', 'Метод не поддерживается.');
+        if (url.pathname.startsWith('/api/auth/google/')) {
+          if (request.method !== 'GET') throw new AppError(405, 'METHOD_NOT_ALLOWED', 'Метод не поддерживается.');
+          rateLimit(request, 'google-auth', 20, 15 * 60 * 1000);
+          if (await handleGoogleAuth(db, request, response, url, { config: googleConfig, fetchImpl })) return;
+        }
         if (request.method !== 'GET') enforceSameOrigin(request);
+        if (url.pathname.startsWith('/api/places/')) {
+          if (request.method === 'POST') rateLimit(request, 'places-search', 20, 10 * 60 * 1000);
+          const body = request.method === 'POST' ? await readJson(request) : {};
+          const placesResult = await handlePlaces(db, request, url, body, { placesApiKey, fetchImpl });
+          if (placesResult !== null) {
+            const status = placesResult.status || 200;
+            sendJson(response, status, placesResult.body || placesResult);
+            return;
+          }
+        }
         if (request.method === 'POST' && url.pathname.startsWith('/api/auth/')) rateLimit(request, 'auth', 20, 15 * 60 * 1000);
         if (request.method === 'POST' && url.pathname.startsWith('/api/polls')) rateLimit(request, 'poll-write', 60, 60 * 1000);
         const body = request.method === 'POST' ? await readJson(request) : {};
-        const authResult = await handleAuth(db, request, response, url, body);
+        const authResult = await handleAuth(
+          db,
+          request,
+          response,
+          url,
+          body,
+          Boolean(googleConfig.clientId && googleConfig.clientSecret && googleConfig.redirectUri),
+          Boolean(placesApiKey)
+        );
         if (authResult !== null) {
           const status = authResult.status || 200;
           const payload = authResult.body || authResult;
