@@ -128,8 +128,14 @@ export default function App() {
 
   const refreshPolls = useCallback(async () => {
     const result = await listPolls();
-    setPolls(result.polls);
-  }, []);
+    const activePollId = location.pathname.match(/^\/polls\/([0-9a-f-]{36})$/i)?.[1];
+    setPolls(current => {
+      const activePoll = current.find(poll => poll.id === activePollId);
+      return activePoll && !result.polls.some(poll => poll.id === activePollId)
+        ? [...result.polls, activePoll]
+        : result.polls;
+    });
+  }, [location.pathname]);
 
   const refreshRooms = useCallback(async () => {
     const result = await listRooms();
