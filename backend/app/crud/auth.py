@@ -8,6 +8,10 @@ def get_user_by_email(db: Session, email: str) -> User | None:
     return db.scalar(select(User).where(User.email == email))
 
 
+def get_user_by_google_sub(db: Session, google_sub: str) -> User | None:
+    return db.scalar(select(User).where(User.google_sub == google_sub))
+
+
 def get_user_by_username(db: Session, username: str) -> User | None:
     return db.scalar(select(User).where(User.username == username))
 

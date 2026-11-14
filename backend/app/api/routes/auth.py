@@ -4,8 +4,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.core.config import COOKIE_SECURE
 from app.models import User
-from app.schemas import AuthResponse, LoginRequest, RegisterRequest, UserResponse
-from app.services.auth import authenticate, create_account, end_session, resolve_session, start_session
+from app.schemas import AuthResponse, GoogleCredentialRequest, LoginRequest, RegisterRequest, UserResponse
+from app.services.auth import authenticate, authenticate_google, create_account, end_session, resolve_session, start_session
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -37,6 +37,17 @@ def login(
     db: Session = Depends(get_db),
 ) -> AuthResponse:
     user, token = authenticate(db, data)
+    start_session(response, token)
+    return AuthResponse(user=UserResponse.model_validate(user))
+
+
+@router.post("/google", response_model=AuthResponse)
+def login_with_google(
+    data: GoogleCredentialRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> AuthResponse:
+    user, token = authenticate_google(db, data.credential)
     start_session(response, token)
     return AuthResponse(user=UserResponse.model_validate(user))
 

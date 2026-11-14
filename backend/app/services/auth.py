@@ -1,19 +1,24 @@
 import hashlib
 import hmac
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from google.auth.exceptions import GoogleAuthError
+from google.auth.transport.requests import Request as GoogleRequest
+from google.oauth2 import id_token
 
-from app.core.config import COOKIE_SECURE, SESSION_TTL_DAYS
+from app.core.config import COOKIE_SECURE, GOOGLE_CLIENT_ID, SESSION_TTL_DAYS
 from app.crud.auth import (
     add_session,
     add_user,
     delete_session,
     get_session,
     get_user_by_email,
+    get_user_by_google_sub,
     get_user_by_username,
 )
 from app.models import User, UserSession
@@ -83,6 +88,57 @@ def authenticate(db: Session, data: LoginRequest) -> tuple[User, str]:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Неверный email или пароль.")
     if len(bytes.fromhex(user.password_hash.split(":", 1)[1])) == 64:
         user.password_hash = hash_password(data.password)
+    token = secrets.token_urlsafe(32)
+    add_session(
+        db,
+        UserSession(
+            token_hash=hash_token(token),
+            user_id=user.id,
+            expires_at=datetime.now(timezone.utc) + timedelta(days=SESSION_TTL_DAYS),
+        ),
+    )
+    db.commit()
+    return user, token
+
+
+def authenticate_google(db: Session, credential: str) -> tuple[User, str]:
+    if not GOOGLE_CLIENT_ID:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Вход через Google пока не настроен.")
+    try:
+        claims = id_token.verify_oauth2_token(credential, GoogleRequest(), GOOGLE_CLIENT_ID)
+    except (ValueError, GoogleAuthError):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Не удалось подтвердить аккаунт Google.") from None
+
+    google_sub = claims.get("sub")
+    email = str(claims.get("email", "")).strip().lower()
+    if not google_sub or not email or claims.get("email_verified") not in (True, "true"):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Google не подтвердил адрес электронной почты.")
+
+    user = get_user_by_google_sub(db, str(google_sub))
+    if user is None:
+        user = get_user_by_email(db, email)
+        if user is not None and user.google_sub not in (None, str(google_sub)):
+            raise HTTPException(status.HTTP_409_CONFLICT, "Этот email уже связан с другим аккаунтом Google.")
+        if user is not None:
+            user.google_sub = str(google_sub)
+        else:
+            username_base = re.sub(r"[^a-z0-9_]", "_", email.split("@", 1)[0].lower()).strip("_")[:20] or "user"
+            username = username_base
+            suffix = 1
+            while get_user_by_username(db, username) is not None:
+                tail = str(suffix)
+                username = f"{username_base[:24 - len(tail)]}{tail}"
+                suffix += 1
+            display_name = str(claims.get("name") or email.split("@", 1)[0]).strip()[:50] or username
+            user = User(
+                username=username,
+                display_name=display_name,
+                email=email,
+                password_hash=hash_password(secrets.token_urlsafe(48)),
+                google_sub=str(google_sub),
+            )
+            add_user(db, user)
+
     token = secrets.token_urlsafe(32)
     add_session(
         db,

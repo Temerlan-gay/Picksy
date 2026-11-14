@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { AuthPanel } from '../features/auth/components/AuthPanel.jsx';
-import { getCurrentUser, login, logout, register } from '../features/auth/api/authApi.js';
+import { getCurrentUser, login, loginWithGoogle, logout, register } from '../features/auth/api/authApi.js';
 import { ideaKinds, optionsForIdea } from '../features/ideas/ideasData.js';
 import { IdeasSection } from '../features/ideas/components/IdeasSection.jsx';
 import { ActivePoll } from '../features/polls/components/ActivePoll.jsx';
@@ -162,6 +162,17 @@ export default function App() {
     }
   }
 
+  async function handleGoogleAuth(credential) {
+    setAuthError('');
+    try {
+      const result = await loginWithGoogle(credential);
+      setUser(result.user);
+      await refreshPolls();
+    } catch (requestError) {
+      setAuthError(requestError.message);
+    }
+  }
+
   function showCreate(idea) {
     setModal({ options: idea ? optionsForIdea(idea.id) : [] });
   }
@@ -225,7 +236,7 @@ export default function App() {
     : null;
 
   if (loading) return <div className="loading-screen">Decido загружает ваши решения…</div>;
-  if (!user) return <AuthPanel onSubmit={handleAuth} error={authError || error} />;
+  if (!user) return <AuthPanel onSubmit={handleAuth} onGoogleCredential={handleGoogleAuth} error={authError || error} />;
   if (error) return <main className="shell"><div className="error-screen"><h1>Не удалось загрузить Decido</h1><p>{error}</p><button className="button-dark" onClick={() => window.location.reload()}>Попробовать ещё раз</button></div></main>;
 
   return <div className="shell">

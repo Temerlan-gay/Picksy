@@ -17,6 +17,7 @@ SESSION_TTL_DAYS = int(os.getenv("SESSION_TTL_DAYS", "14"))
 COOKIE_SECURE = os.getenv(
     "COOKIE_SECURE", "true" if os.getenv("VERCEL") else "false"
 ).lower() == "true"
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 CORS_ORIGINS = [
     origin.strip()
     for origin in os.getenv("CORS_ORIGINS", "http://127.0.0.1:5173,http://localhost:5173").split(",")
