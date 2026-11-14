@@ -77,7 +77,7 @@ def list_polls(db: Session, user: User) -> list[PollResponse]:
     return [_serialize_poll(poll, user.id) for poll in list_visible_polls(db, user)]
 
 
-def _can_access(poll: Poll, user: User, invite_token: str | None) -> bool:
+def can_access_poll(poll: Poll, user: User, invite_token: str | None) -> bool:
     if poll.visibility != "private" or poll.owner_id == user.id:
         return True
     if not invite_token:
@@ -93,7 +93,7 @@ def get_poll(
     invite_token: str | None = None,
 ) -> PollResponse:
     poll = get_poll_by_id(db, poll_id)
-    if poll is None or not _can_access(poll, user, invite_token):
+    if poll is None or not can_access_poll(poll, user, invite_token):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Голосование не найдено.")
     return _serialize_poll(poll, user.id)
 
@@ -140,7 +140,7 @@ def cast_vote(
     invite_token: str | None = None,
 ) -> PollResponse:
     poll = get_poll_by_id(db, poll_id)
-    if poll is None or not _can_access(poll, user, invite_token):
+    if poll is None or not can_access_poll(poll, user, invite_token):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Голосование не найдено.")
     if _is_closed(poll):
         raise HTTPException(status.HTTP_409_CONFLICT, "Голосование завершено.")

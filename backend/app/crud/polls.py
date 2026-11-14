@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from app.models import Poll, User, Vote, VoteChoice, VoteScore
+from app.models import Poll, PollDiscussionQuota, PollMessage, User, Vote, VoteChoice, VoteScore
 
 
 def list_visible_polls(db: Session, user: User) -> list[Poll]:
@@ -48,6 +49,72 @@ def set_poll_closed(db: Session, poll: Poll, closed_at: datetime) -> Poll:
     poll.closed_at = closed_at
     db.flush()
     return poll
+
+
+def list_poll_messages(db: Session, poll_id: str, limit: int = 50) -> list[PollMessage]:
+    messages = list(db.scalars(
+        select(PollMessage)
+        .options(joinedload(PollMessage.author))
+        .where(PollMessage.poll_id == poll_id)
+        .order_by(PollMessage.created_at.desc(), PollMessage.id.desc())
+        .limit(limit)
+    ))
+    return list(reversed(messages))
+
+
+def count_poll_user_messages(db: Session, poll_id: str, user_id: str) -> int:
+    from sqlalchemy import func
+
+    return db.scalar(
+        select(func.count(PollMessage.id)).where(
+            PollMessage.poll_id == poll_id,
+            PollMessage.user_id == user_id,
+        )
+    ) or 0
+
+
+def list_recent_poll_user_messages(
+    db: Session,
+    poll_id: str,
+    user_id: str,
+    since: datetime,
+) -> list[PollMessage]:
+    return list(db.scalars(
+        select(PollMessage)
+        .where(
+            PollMessage.poll_id == poll_id,
+            PollMessage.user_id == user_id,
+            PollMessage.created_at >= since,
+        )
+        .order_by(PollMessage.created_at.desc())
+    ))
+
+
+def add_poll_message(db: Session, message: PollMessage) -> PollMessage:
+    db.add(message)
+    db.flush()
+    return message
+
+
+def lock_discussion_quota(db: Session, poll_id: str, user_id: str) -> PollDiscussionQuota:
+    statement = select(PollDiscussionQuota).where(
+        PollDiscussionQuota.poll_id == poll_id,
+        PollDiscussionQuota.user_id == user_id,
+    ).with_for_update()
+    quota = db.scalar(statement)
+    if quota is not None:
+        return quota
+
+    try:
+        with db.begin_nested():
+            quota = PollDiscussionQuota(poll_id=poll_id, user_id=user_id)
+            db.add(quota)
+            db.flush()
+    except IntegrityError:
+        quota = db.scalar(statement)
+        if quota is None:
+            raise
+    return quota
 
 
 def get_vote(db: Session, poll_id: str, user_id: str) -> Vote | None:

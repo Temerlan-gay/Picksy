@@ -14,7 +14,7 @@ flowchart LR
   Prometheus --> Grafana[Grafana dashboard]
 ```
 
-The API layer validates transport input and sets HTTP responses. Services enforce account, permission, voting, and result rules. CRUD owns SQL queries and persistence. Models and Pydantic schemas define storage and API contracts. The browser calls the API through the same origin in production; Vite proxies `/api` to FastAPI in development.
+The API layer validates transport input and sets HTTP responses. Services enforce account, permission, voting, discussion limits, and result rules. CRUD owns SQL queries and persistence. Models and Pydantic schemas define storage and API contracts. The browser calls the API through the same origin in production; Vite proxies `/api` to FastAPI in development.
 
 ## Local release check
 
@@ -42,5 +42,6 @@ Database schema changes must remain additive and safe to run repeatedly because 
 - `GET /api/health` checks database connectivity and returns 503 when PostgreSQL is unavailable.
 - `GET /api/health/live` is a process liveness check.
 - `GET /api/metrics` exposes Prometheus request totals and latency histograms.
+- `GET/POST /api/polls/{id}/messages` stores the active poll discussion. Each non-owner gets two messages per poll; the owner can post without that cap, with a three-second cooldown, ten-message-per-minute limit, and duplicate-message check.
 - Each API request emits one JSON log line with request ID, method, path, status, and duration. The request ID is also returned in `X-Request-ID`.
 - In Docker Compose, Prometheus is at `http://127.0.0.1:9090` and Grafana at `http://127.0.0.1:3001`. These endpoints are not published on the public interface by the compose configuration.

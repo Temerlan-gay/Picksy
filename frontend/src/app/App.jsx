@@ -45,13 +45,13 @@ function Hero({ onCreate, onCollections }) {
   );
 }
 
-function IdeasPage({ polls, filter, setFilter, onCreate, onChoose, onVote, onCopy, onCollections }) {
+function IdeasPage({ polls, user, filter, setFilter, onCreate, onChoose, onVote, onCopy, onCollections }) {
   const activePoll = polls.find(poll => !poll.closed);
   const completedPoll = polls.find(poll => poll.closed);
   return <>
     <Hero onCreate={() => onCreate()} onCollections={() => onCollections()} />
     {activePoll
-      ? <ActivePoll poll={activePoll} onVote={onVote} onCopyLink={onCopy} />
+      ? <ActivePoll poll={activePoll} user={user} onVote={onVote} onCopyLink={onCopy} />
       : completedPoll
         ? <section className="active-vote empty-poll"><div className="vote-heading"><div><div className="section-kicker"><span className="live-dot" /> ВАШ АКТИВНЫЙ ВЫБОР</div><h2>Открытых голосований пока нет</h2><p className="vote-subtitle">Последнее решение уже завершено. Создайте новый план для компании.</p></div></div><button className="button-coral" onClick={() => onCreate()}>Создать голосование <span>→</span></button></section>
         : <section className="active-vote empty-poll"><div className="vote-heading"><div><div className="section-kicker"><span className="live-dot" /> ВАШ АКТИВНЫЙ ВЫБОР</div><h2>Куда вернёмся в следующий раз?</h2><p className="vote-subtitle">Добавьте три места из недавних встреч и выберите, куда пойти компанией.</p></div></div><button className="button-coral" onClick={() => onCreate()}>Добавить места <span>→</span></button></section>}
@@ -86,7 +86,7 @@ function CollectionsPage({ onCreate }) {
 
 function PollDetailPage({ poll, onVote, onCopy, onClose, user }) {
   if (!poll) return <div className="loading-screen">Загружаем голосование…</div>;
-  return <section className="detail-page"><Link to="/polls" className="all-ideas">← Все голосования</Link><ActivePoll poll={poll} onVote={onVote} onCopyLink={onCopy} onClose={onClose} canClose={poll.owner_id === user.id} /></section>;
+  return <section className="detail-page"><Link to="/polls" className="all-ideas">← Все голосования</Link><ActivePoll poll={poll} user={user} onVote={onVote} onCopyLink={onCopy} onClose={onClose} canClose={poll.owner_id === user.id} /></section>;
 }
 
 function Footer() {
@@ -242,7 +242,7 @@ export default function App() {
   return <div className="shell">
     <Header user={user} activeCount={pollCount} onProfile={() => setProfileOpen(true)} />
     <Routes>
-      <Route path="/" element={<IdeasPage polls={polls} filter={filter} setFilter={setFilter} onCreate={showCreate} onChoose={showCreate} onVote={handleVote} onCopy={handleCopyLink} onCollections={() => navigate('/collections')} />} />
+      <Route path="/" element={<IdeasPage polls={polls} user={user} filter={filter} setFilter={setFilter} onCreate={showCreate} onChoose={showCreate} onVote={handleVote} onCopy={handleCopyLink} onCollections={() => navigate('/collections')} />} />
       <Route path="/polls" element={<PollsPage polls={polls} onCreate={showCreate} />} />
       <Route path="/polls/:pollId" element={<PollDetailPage poll={currentPoll} onVote={handleVote} onCopy={handleCopyLink} onClose={handleClosePoll} user={user} />} />
       <Route path="/collections" element={<CollectionsPage onCreate={showCreate} />} />

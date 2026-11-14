@@ -41,6 +41,7 @@ class User(Base):
 
     polls: Mapped[list["Poll"]] = relationship(back_populates="owner")
     votes: Mapped[list["Vote"]] = relationship(back_populates="user")
+    messages: Mapped[list["PollMessage"]] = relationship(back_populates="author", cascade="all, delete-orphan")
     sessions: Mapped[list["UserSession"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
@@ -83,6 +84,33 @@ class Poll(Base):
         lazy="selectin",
     )
     votes: Mapped[list["Vote"]] = relationship(back_populates="poll", cascade="all, delete-orphan")
+    messages: Mapped[list["PollMessage"]] = relationship(back_populates="poll", cascade="all, delete-orphan")
+
+
+class PollMessage(Base):
+    __tablename__ = "poll_messages"
+    __table_args__ = (
+        Index("ix_poll_messages_poll_created", "poll_id", "created_at"),
+        Index("ix_poll_messages_poll_user_created", "poll_id", "user_id", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    poll_id: Mapped[str] = mapped_column(ForeignKey("polls.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    body: Mapped[str] = mapped_column(String(500), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    poll: Mapped[Poll] = relationship(back_populates="messages")
+    author: Mapped[User] = relationship(back_populates="messages")
+
+
+class PollDiscussionQuota(Base):
+    __tablename__ = "poll_discussion_quotas"
+
+    poll_id: Mapped[str] = mapped_column(ForeignKey("polls.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    question_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class PollOption(Base):

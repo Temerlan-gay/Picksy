@@ -11,3 +11,8 @@ export const submitChoices = (pollId, optionIds) => apiRequest(`/api/polls/${enc
   method: 'POST',
   body: { option_ids: optionIds }
 });
+export const getPollDiscussion = pollId => apiRequest(`/api/polls/${encodeURIComponent(pollId)}/messages`);
+export const sendPollMessage = (pollId, body) => apiRequest(`/api/polls/${encodeURIComponent(pollId)}/messages`, {
+  method: 'POST',
+  body: { body }
+});

@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.deps import get_db
-from app.api.routes import auth, polls
+from app.api.routes import auth, discussion, polls
 from app.core.database import Base
 
 
@@ -30,6 +30,7 @@ def client():
     test_app = FastAPI()
     test_app.include_router(auth.router)
     test_app.include_router(polls.router)
+    test_app.include_router(discussion.router)
     test_app.dependency_overrides[get_db] = override_get_db
 
     with TestClient(test_app) as test_client:

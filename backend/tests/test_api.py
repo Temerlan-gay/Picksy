@@ -86,6 +86,63 @@ def test_google_sign_in_creates_a_session(client, monkeypatch):
     assert client.get("/api/auth/me").json()["user"]["id"] == user["id"]
 
 
+def test_discussion_limits_each_participant_to_two_questions(client):
+    register(client, "discussionowner")
+    poll = client.post(
+        "/api/polls",
+        json={"title": "Куда пойдём?", "type": "rating", "options": ["Рамен", "Боулинг"]},
+    ).json()
+    poll_id = poll["id"]
+    client.post("/api/auth/logout")
+    register(client, "discussionguest")
+
+    initial = client.get(f"/api/polls/{poll_id}/messages")
+    assert initial.status_code == 200
+    assert initial.json()["questions_remaining"] == 2
+    assert initial.json()["is_leader"] is False
+
+    for text in ("Есть парковка?", "До скольки работаете?"):
+        sent = client.post(f"/api/polls/{poll_id}/messages", json={"body": text})
+        assert sent.status_code == 201
+        assert sent.json()["is_leader"] is False
+
+    assert client.get(f"/api/polls/{poll_id}/messages").json()["questions_remaining"] == 0
+    blocked = client.post(f"/api/polls/{poll_id}/messages", json={"body": "Можно ещё вопрос?"})
+    assert blocked.status_code == 429
+    assert blocked.json()["detail"] == "Вы использовали оба вопроса в этом голосовании."
+
+
+def test_discussion_leader_is_unlimited_but_rate_limited(client, monkeypatch):
+    from app.services import discussion as discussion_service
+
+    register(client, "discussionlead")
+    poll = client.post(
+        "/api/polls",
+        json={"title": "Куда пойдём?", "type": "rating", "options": ["Рамен", "Боулинг"]},
+    ).json()
+    poll_id = poll["id"]
+
+    first = client.post(f"/api/polls/{poll_id}/messages", json={"body": "Команда, голосуем до 18:00."})
+    second = client.post(f"/api/polls/{poll_id}/messages", json={"body": "Напоминаю про голосование."})
+
+    assert first.status_code == 201
+    assert first.json()["is_leader"] is True
+    assert second.status_code == 429
+    assert second.headers["retry-after"]
+
+    monkeypatch.setattr(discussion_service, "LEADER_COOLDOWN_SECONDS", 0)
+    for index in range(9):
+        accepted = client.post(
+            f"/api/polls/{poll_id}/messages",
+            json={"body": f"Уточнение лидера номер {index + 1}"},
+        )
+        assert accepted.status_code == 201
+
+    rate_limited = client.post(f"/api/polls/{poll_id}/messages", json={"body": "Ещё одно объявление."})
+    assert rate_limited.status_code == 429
+    assert rate_limited.json()["detail"] == "Лимит сообщений лидера — 10 в минуту."
+
+
 def test_ratings_are_persisted_calculated_and_editable(client):
     register(client, "ratingowner")
     poll = client.post(

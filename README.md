@@ -80,11 +80,13 @@ The API is available at <http://127.0.0.1:8000>; interactive API docs are at <ht
 
 ## First end-to-end flow
 
-1. Create an account in the browser. FastAPI validates the input, hashes the password, stores the account, and sets an HTTP-only session cookie.
+1. Create an account in the browser. FastAPI validates the input, hashes the password, stores the account, and sets an HTTP-only session cookie. Google sign-in is also available when the OAuth client is configured.
 2. Create a poll with a question, two or more options, a voting type, and an optional deadline.
 3. Share the poll URL with participants. Participants sign in, open the poll, and submit a choice or ratings from 1 to 10.
 4. FastAPI validates and stores each ballot in SQL tables. The React app reloads the poll and displays counts and rating averages from the API response.
 5. The owner can close the poll. The backend rejects further ballots and the UI shows the winner, a tie, or that nobody voted.
+
+Participants can discuss the choices in the active poll card. Each non-owner can post two messages per poll; the poll owner can answer without that cap, with server-side rate limits to prevent spam. The discussion remains in PostgreSQL and refreshes in the browser every ten seconds.
 
 The three supported types are single choice, multiple choice, and 1–10 ratings. Each account can submit one ballot per poll; existing ballots can be updated until the poll closes. Public polls are visible to signed-in users. Private invite support exists in the API but is not exposed by the current UI.
 

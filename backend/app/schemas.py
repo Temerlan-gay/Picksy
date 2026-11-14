@@ -97,6 +97,33 @@ class VoteRequest(BaseModel):
         return self
 
 
+class PollMessageCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def trim_body(self) -> "PollMessageCreate":
+        self.body = self.body.strip()
+        if not self.body:
+            raise ValueError("Напишите вопрос перед отправкой.")
+        return self
+
+
+class PollMessageResponse(BaseModel):
+    id: str
+    user_id: str
+    display_name: str
+    body: str
+    created_at: datetime
+    is_leader: bool
+
+
+class PollDiscussionResponse(BaseModel):
+    messages: list[PollMessageResponse]
+    is_leader: bool
+    questions_remaining: int | None
+    question_limit: int
+
+
 class RatingResponse(BaseModel):
     option_id: str
     score: int

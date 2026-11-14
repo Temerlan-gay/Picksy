@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { PollDiscussion } from './PollDiscussion.jsx';
 
 const optionEmojis = ['🍜', '🎳', '☕', '🌿', '🎲', '🎨', '🍕', '🌅', '⛸️', '🎭'];
 
@@ -11,7 +12,7 @@ function getTimeLeft(deadline) {
   return `${hours}:${minutes}:${seconds}`;
 }
 
-export function ActivePoll({ poll, onVote, onCopyLink, onClose, canClose = false }) {
+export function ActivePoll({ poll, user, onVote, onCopyLink, onClose, canClose = false }) {
   const existingRatings = useMemo(() => new Map((poll.my_vote?.ratings || []).map(item => [item.option_id, item.score])), [poll]);
   const [ratings, setRatings] = useState(() => Object.fromEntries(existingRatings));
   const [busy, setBusy] = useState(false);
@@ -130,6 +131,8 @@ export function ActivePoll({ poll, onVote, onCopyLink, onClose, canClose = false
           </article>
         ))}
       </div>
+
+      <PollDiscussion poll={poll} user={user} />
 
       {error && <p className="vote-message" role="alert">{error}</p>}
       <div className="vote-footer">
