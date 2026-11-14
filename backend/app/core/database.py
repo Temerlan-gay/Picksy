@@ -18,10 +18,12 @@ if DATABASE_URL.startswith("sqlite") and database_name and database_name != ":me
     database_file.parent.mkdir(parents=True, exist_ok=True)
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+pool_options = {"pool_size": 1, "max_overflow": 0, "pool_recycle": 300} if DATABASE_URL.startswith("postgresql") else {}
 engine = create_engine(
     DATABASE_URL,
     connect_args=connect_args,
     pool_pre_ping=True,
+    **pool_options,
 )
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 

@@ -119,3 +119,7 @@ Open <http://localhost:8000>. The PostgreSQL data is stored in the `postgres_dat
 ## VM deployment
 
 Build and run the container on the VM, keep its published port bound to `127.0.0.1`, and configure Nginx with `deploy/nginx.conf`. Enable HTTPS in Nginx and set `COOKIE_SECURE=true`. Keep `.env.docker` and database credentials on the server; do not commit them. Back up the PostgreSQL volume. The container serves the built React app and its `/api` endpoints from the same origin.
+
+## Vercel deployment
+
+The repository includes a Vercel Services configuration that builds `frontend/` as the Vite site and `backend/` as a FastAPI service. Both use the same public origin: `/api/*` goes to FastAPI and other paths go to React. Connect the repository to Vercel with the repository root as the project root, then add a PostgreSQL database through the Vercel Marketplace and set the backend service's `DATABASE_URL` to its pooled connection string. Set `COOKIE_SECURE=true`; same-origin routing keeps the session cookie first-party. The `vercel.json` Services feature is currently in beta.
