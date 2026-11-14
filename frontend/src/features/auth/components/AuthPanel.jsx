@@ -74,7 +74,7 @@ export function AuthPanel({ onSubmit, onGoogleCredential, error }) {
           <label htmlFor="email">Email</label>
           <input id="email" name="email" type="email" autoComplete="email" maxLength="254" required placeholder="you@example.com" />
           <label htmlFor="password">Пароль</label>
-          <input id="password" name="password" type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} minLength="10" maxLength="128" required placeholder="Не менее 10 символов" />
+          <input id="password" name="password" type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} minLength={mode === 'register' ? 6 : 1} maxLength="128" required placeholder={mode === 'register' ? 'Не менее 6 символов' : 'Ваш пароль'} />
           {error && <p className="form-error" role="alert">{error}</p>}
           <button className="button-dark auth-submit" disabled={busy}>{busy ? 'Подождите…' : mode === 'register' ? 'Создать аккаунт' : 'Войти'} <span>→</span></button>
         </form>

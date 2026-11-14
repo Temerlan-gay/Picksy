@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import secrets
 
 from sqlalchemy import create_engine, inspect, make_url, text
@@ -19,7 +20,12 @@ if DATABASE_URL.startswith("sqlite") and database_name and database_name != ":me
     database_file.parent.mkdir(parents=True, exist_ok=True)
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-pool_options = {"pool_size": 1, "max_overflow": 0, "pool_recycle": 300} if DATABASE_URL.startswith("postgresql") else {}
+pool_options = {
+    "pool_size": max(1, int(os.getenv("DB_POOL_SIZE", "5"))),
+    "max_overflow": max(0, int(os.getenv("DB_MAX_OVERFLOW", "5"))),
+    "pool_timeout": max(1, int(os.getenv("DB_POOL_TIMEOUT", "10"))),
+    "pool_recycle": 300,
+} if DATABASE_URL.startswith("postgresql") else {}
 engine = create_engine(
     DATABASE_URL,
     connect_args=connect_args,

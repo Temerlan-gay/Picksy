@@ -21,7 +21,7 @@ class RegisterRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=50)
     username: str | None = Field(default=None, min_length=3, max_length=24, pattern=r"^[A-Za-z0-9_]+$")
     email: EmailStr
-    password: str = Field(min_length=10, max_length=128)
+    password: str = Field(min_length=6, max_length=128)
 
 
 class LoginRequest(BaseModel):
